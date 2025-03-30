@@ -1,0 +1,110 @@
+Análise Emocional 6 Camadas (Realizado por Leitura Corporal)
+Descubra seu padrão predominante de personalidade e receba um guia estratégico e personalizado para desbloqueio emocional.
+
+O aplicativo de análise emocional identifica o padrão predominante de personalidade com base na análise corporal e inclui respostas a três perguntas da vida para serem resolvidas com um Guia Prático de "Virada de Chave".
+
+Etapa 1 – Questionário Inicial
+Antes de observar o seu corpo, precisamos entender brevemente seu histórico físico e emocional. Isso ajuda a identificar marcas no corpo que revelam impactos emocionais profundos.
+1. Para quem será feita essa análise?
+ ( ) Para mim mesmo
+ ( ) Para outra pessoa
+ Se outra pessoa, descreva o motivo (sua resposta será analisada): 
+2. Você já passou por alguma cirurgia (exemplo rosto, estômago, Corpo) significativa?
+ ( ) Sim
+ ( ) Não
+ Se sim, descreva: tipo da cirurgia, ano, e qualquer outro detalhe relevante.
+3. Já vivenciou algum evento traumático, guerra que marcou emocionalmente sua vida?
+ ( ) Sim
+ ( ) Não
+ Se sim, descreva: qual foi o evento e quando aconteceu.
+4. Você usa ou já usou algum aparelho ortodôntico, facial ou prótese corporal?
+ ( ) Sim
+ ( ) Não
+ Se sim, descreva: qual aparelho, onde e por quanto tempo foi utilizado.
+
+Etapa 2 – Envio das Fotos para Análise Corporal
+Para identificar seu padrão predominante de personalidade, precisamos observar seu formato corporal e expressões faciais.
+ Envie 4 fotos:
+Fotos Necessárias:
+Corpo Inteiro – Frontal: de frente, da cabeça aos pés
+
+
+Corpo Inteiro – Traseira: de costas, da cabeça aos pés
+
+
+Rosto com Expressão Séria: olhando para a câmera, sem sorrir
+
+
+Rosto com Sorriso Natural: sorriso espontâneo, rosto centralizado
+
+
+Dicas para fotos com melhor qualidade:
+Use roupas ajustadas (evite roupas largas)
+
+
+Fundo neutro e boa iluminação
+
+
+Postura natural, sem forçar
+
+
+Evite acessórios que cubram o rosto ou corpo
+
+Etapa 3 – Questionário de Prioridades
+Agora vamos afunilar sua análise para o que realmente importa pra você nesse momento.
+Parte 1 – Área de Prioridade Atual
+Escolha a área da sua vida onde você sente que está mais travado:
+Saúde – Bem-estar físico, mental e emocional
+
+Relacionamentos Amorosos – Conexão, autoestima, afetos
+Vida Profissional – Trabalho, propósito, resultados
+
+
+Parte 2 – Queixas Emocionais ou Comportamentais
+Escreva até 3 situações que te incomodam ou que você gostaria de mudar:
+Queixa 1 (obrigatória):
+ Ex: “Tenho dificuldade em dizer o que penso”
+
+
+Queixa 2 (opcional):
+ Ex: “Sinto que me saboto quando estou prestes a dar certo”
+
+
+Queixa 3 (opcional):
+ Ex: “Me comparo demais e perco o foco”
+
+Etapa 4 – Enviar para Análise
+Após preencher tudo, clique no botão abaixo para enviar suas informações para análise personalizada.
+[BOTÃO: Enviar para Análise]
+ Checkout: pagamento via Stripe antes da primeira análise
+ [Link de pagamento ou integração com botão]
+
+Etapa 5 – Confirmação + Agradecimento + Checkout
+Aqui é o momento de acolher o usuário, reforçar a transformação que está por vir e conduzi-lo ao pagamento da análise. O objetivo é gerar segurança + valor percebido + senso de avanço.
+Tela de Confirmação / Agradecimento (antes do checkout):
+
+Título:
+ Informações para Análise enviadas com sucesso!
+Texto:
+ Recebemos suas informações e suas fotos com sucesso!
+ Agora, nossa equipe vai iniciar o processo de leitura emocional e comportamental para identificar com clareza seu padrão predominante de personalidade.
+Você receberá:
+Um relatório exclusivo e personalizado com base na sua análise corporal e emocional
+
+
+Um guia estratégico com orientações práticas para lidar com bloqueios e acelerar seus resultados
+
+
+Dicas personalizadas para relacionamentos, carreira e bem-estar emocional
+
+
+Essa é a primeira chave para a sua virada de chave emocional e prosperidade real.
+
+Próximo passo:
+ Finalize o pagamento abaixo para que a análise seja liberada.
+
+[BOTÃO Checkout: “Realizar Pagamento da Análise”]
+ Valor: US$ XX (definido por você)
+ (Pagamento 100% seguro via Stripe)
+
+Após o pagamento, o usuário será redirecionado para uma tela de aguardando análise ou mensagem de que será notificado por e-mail/WhatsApp em até 24 horas.

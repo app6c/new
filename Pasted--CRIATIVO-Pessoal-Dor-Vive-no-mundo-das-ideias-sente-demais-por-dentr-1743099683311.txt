@@ -1,0 +1,72 @@
+{
+  "CRIATIVO": {
+    "Pessoal": {
+      "Dor": "Vive no mundo das ideias, sente demais por dentro, mas não consegue organizar ou expressar as emoções. Se isola para não se frustrar com o mundo externo.",
+      "Recurso": "Sensível, visionário, profundo. Quando está no recurso, acessa a criatividade com leveza, se conecta com o espiritual e traz ideias que transformam o mundo."
+    },
+    "Relacionamentos": {
+      "Dor": "Foge de contato. Acha que se conectar é perigoso, que será invadido ou incompreendido. Tende ao isolamento e a evitar vínculo emocional.",
+      "Recurso": "Gera conexões seguras com escuta profunda, conversas inteligentes e presença verdadeira. Atrai respeito sem precisar se impor."
+    },
+    "Profissional": {
+      "Dor": "Tem ideias incríveis, mas trava na execução. Medo de julgamento, rotina ou exposição. Procrastina e se sabota.",
+      "Recurso": "Quando entende seu valor, é fonte de inovação e sabedoria. Prosperidade vem quando colabora com pessoas práticas e foca no que realmente importa."
+    }
+  },
+  "CONECTIVO": {
+    "Pessoal": {
+      "Dor": "Sente demais, chora por dentro, busca atenção constantemente. Sofre por rejeição mesmo onde não há. Vive se perguntando se é amado.",
+      "Recurso": "Consegue expressar emoções com leveza e verdade. É empático, alegre, gera conexão genuína e comunicação afetuosa."
+    },
+    "Relacionamentos": {
+      "Dor": "Se apega, se entrega demais, perde a individualidade. Cria dependência emocional e medo de abandono.",
+      "Recurso": "Cria vínculos saudáveis com leveza, conexão emocional e liberdade. Sabe dar e receber na medida."
+    },
+    "Profissional": {
+      "Dor": "Precisa de atenção para se motivar. Desiste fácil se estiver sozinho. Oscila muito entre entusiasmo e desânimo.",
+      "Recurso": "Incrível para falar, ensinar, vender, conectar. Quando sente pertencimento e é valorizado, floresce profissionalmente."
+    }
+  },
+  "FORTE": {
+    "Pessoal": {
+      "Dor": "Engole tudo. Reprime as emoções até explodir ou implodir. Vive no modo sobrevivência, carregando o peso do mundo.",
+      "Recurso": "É forte, estável, profundo e resistente. Quando acessa seu valor, se expressa com segurança e transforma dor em poder."
+    },
+    "Relacionamentos": {
+      "Dor": "Se anula, se submete, carrega tudo nas costas. Acumula frustrações até romper ou se fechar completamente.",
+      "Recurso": "Constrói relações de confiança e entrega, com base em diálogo firme e lealdade emocional. Ama com solidez."
+    },
+    "Profissional": {
+      "Dor": "Trabalha demais e recebe de menos. Vive para agradar e se sacrifica até se perder.",
+      "Recurso": "Entrega com consistência, sustenta processos, inspira estabilidade. Ganha mais quando se posiciona com autoestima e valor próprio."
+    }
+  },
+  "LIDER": {
+    "Pessoal": {
+      "Dor": "Controla tudo. Tem dificuldade de sentir e admitir fragilidade. Usa lógica para não acessar a dor.",
+      "Recurso": "Confiante, direto, inteligente. Quando se permite sentir, lidera com alma, não apenas com a mente."
+    },
+    "Relacionamentos": {
+      "Dor": "Domina ou manipula para evitar ser ferido. Cria distanciamento emocional por medo de perder o controle.",
+      "Recurso": "Entrega presença estratégica com cuidado emocional. Lidera com firmeza, mas também com afeto real."
+    },
+    "Profissional": {
+      "Dor": "Quer controlar tudo, centraliza, desconfia dos outros. Tende a trabalhar sozinho por medo de traição.",
+      "Recurso": "É um executor nato. Quando confia, forma equipes poderosas e alcança resultados extraordinários com agilidade."
+    }
+  },
+  "COMPETITIVO": {
+    "Pessoal": {
+      "Dor": "Busca ser perfeito, mas vive se cobrando. Esconde a vulnerabilidade atrás de uma aparência impecável.",
+      "Recurso": "Brilha com autenticidade. Sabe que não precisa provar nada, só entregar com excelência e leveza."
+    },
+    "Relacionamentos": {
+      "Dor": "Exige demais, espera o ideal. Sofre ao ser rejeitado ou não reconhecido.",
+      "Recurso": "Ama intensamente e com verdade. Quando aprende a se mostrar, constrói vínculos com profundidade e prazer."
+    },
+    "Profissional": {
+      "Dor": "Tem medo de falhar, trava nos detalhes, procrastina com medo de não entregar perfeito.",
+      "Recurso": "É produtivo, disciplinado e focado. Cresce quando entende que feito é melhor que perfeito. Prosperidade vem com consistência e autocuidado."
+    }
+  }
+}

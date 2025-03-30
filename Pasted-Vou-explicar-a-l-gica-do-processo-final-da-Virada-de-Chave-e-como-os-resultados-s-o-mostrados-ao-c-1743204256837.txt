@@ -1,0 +1,61 @@
+Vou explicar a lógica do processo final da "Virada de Chave" e como os resultados são mostrados ao cliente:
+
+Processo da Virada de Chave (Etapa 7)
+A Virada de Chave é o resultado final que é mostrado ao cliente após toda a análise ser concluída. Ela contém três blocos principais:
+
+1. Bloco 1: Análise Corporal e Emocional
+Este bloco apresenta uma análise geral do cliente, baseada na leitura corporal
+O conteúdo vem do campo diagnosticoEmocional no banco de dados
+No frontend é exibido como block1Analysis
+2. Bloco 2: Identificação dos Padrões
+Este bloco é dividido em três partes:
+
+Padrão de Dor:
+
+Mostra o padrão principal (normalmente o traço dominante) no estado de dor
+Nome do padrão: vem do campo traco1Nome no banco
+Descrição: vem do campo traco1Dor no banco
+No frontend são mostrados como block2PainPattern e block2PainDescription
+Padrão de Recurso:
+
+Mostra o padrão principal em seu estado positivo/recurso
+Nome do padrão: vem do campo traco2Nome no banco
+Descrição: vem do campo traco2Recurso no banco
+No frontend são mostrados como block2ResourcePattern e block2ResourceDescription
+Área de Prioridade:
+
+Indica a área que o cliente deve focar (Pessoal, Relacionamento ou Profissional)
+Nome da área: vem do campo traco3Nome no banco
+Descrição: vem do campo traco3Dor no banco
+No frontend são mostrados como block2PriorityArea e block2PriorityAreaDescription
+3. Bloco 3: Convite à Ação
+Este bloco contém três seções que guiam o cliente para a transformação:
+
+Ação Inicial: Vem do campo acaoTraco1 no banco
+Manutenção do Padrão: Vem do campo acaoTraco2 no banco
+Compromisso do Cliente: Vem do campo acaoTraco3 no banco
+Lógica de Exibição ao Cliente
+O sistema funciona da seguinte maneira:
+
+Quando o analista completa a análise na Etapa 6 (tabela de pontuação corporal), ele gera o resultado final na Etapa 7
+
+Ao salvar a Etapa 7, o sistema marca a análise como tendo um resultado disponível (hasResult = true)
+
+O cliente pode então acessar sua análise e ver:
+
+Um resumo dos seus padrões emocionais (5 tipos) organizados por percentual
+Gráficos visuais (barras e pizza) mostrando a composição emocional
+O conteúdo detalhado da Virada de Chave nos 3 blocos mencionados acima
+O cliente agora também pode:
+
+Baixar o resultado em PDF (novo recurso implementado)
+Compartilhar o link da análise (novo recurso implementado)
+Solicitar regeneração da análise se necessário
+Mapeamento Técnico
+O problema que corrigimos era uma incompatibilidade entre os nomes dos campos no backend e no frontend:
+
+No backend, usamos nomes como diagnosticoEmocional, traco1Nome, etc.
+No frontend, o código espera nomes como block1Analysis, block2PainPattern, etc.
+A solução foi adicionar um mapeamento na função getAnalysisResult no arquivo storage.ts para que, quando os dados forem enviados ao frontend, os nomes sejam convertidos para os esperados pelo frontend.
+
+Isso garante que os dados sejam exibidos corretamente na interface do usuário sem precisar modificar o esquema do banco de dados ou reescrever o código frontend.

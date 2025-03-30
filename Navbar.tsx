@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import InstallButton from "../pwa/InstallButton";
+import { DebugButton } from "../DebugButton";
 
 export function Navbar() {
   const { user, logoutMutation } = useAuth();
@@ -27,7 +29,7 @@ export function Navbar() {
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-2 md:gap-6">
           <Link href="/" className="flex items-center space-x-2">
-            <span className="text-xl font-bold text-primary">AE7C</span>
+            <span className="text-xl font-bold text-primary">EA6C</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-sm">
@@ -40,6 +42,9 @@ export function Navbar() {
                   <>
                     <Link href="/analyst/analyses" className="font-medium transition-colors hover:text-primary">
                       Análises
+                    </Link>
+                    <Link href="/analyst/users" className="font-medium transition-colors hover:text-primary">
+                      Usuários
                     </Link>
                   </>
                 )}
@@ -54,6 +59,9 @@ export function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-4">
+          <DebugButton />
+          <InstallButton />
+          
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -91,10 +99,10 @@ export function Navbar() {
             </DropdownMenu>
           ) : (
             <>
-              <Link href="/auth">
+              <Link href="/auth?tab=login">
                 <Button variant="outline">Entrar</Button>
               </Link>
-              <Link href="/auth">
+              <Link href="/auth?tab=register">
                 <Button>Cadastre-se</Button>
               </Link>
             </>
@@ -112,7 +120,7 @@ export function Navbar() {
           <SheetContent side="right" className="w-[240px] sm:w-[300px]">
             <div className="px-2 py-6 flex flex-col h-full">
               <Link href="/" className="mb-6 flex items-center" onClick={() => setOpen(false)}>
-                <span className="text-xl font-bold text-primary">AE7C</span>
+                <span className="text-xl font-bold text-primary">EA6C</span>
               </Link>
               <nav className="flex flex-col gap-4 flex-1">
                 {user && (
@@ -132,6 +140,13 @@ export function Navbar() {
                           onClick={() => setOpen(false)}
                         >
                           Análises
+                        </Link>
+                        <Link 
+                          href="/analyst/users" 
+                          className="flex items-center py-2 text-lg font-semibold hover:text-primary"
+                          onClick={() => setOpen(false)}
+                        >
+                          Usuários
                         </Link>
                       </>
                     )}
@@ -166,12 +181,18 @@ export function Navbar() {
                 {!user && (
                   <>
                     <div className="mt-auto flex flex-col gap-3">
-                      <Link href="/auth" onClick={() => setOpen(false)}>
+                      <div className="mb-3">
+                        <DebugButton />
+                        <div className="mt-2">
+                          <InstallButton />
+                        </div>
+                      </div>
+                      <Link href="/auth?tab=register" onClick={() => setOpen(false)}>
                         <Button className="w-full justify-center" variant="default" size="lg">
                           Cadastre-se
                         </Button>
                       </Link>
-                      <Link href="/auth" onClick={() => setOpen(false)}>
+                      <Link href="/auth?tab=login" onClick={() => setOpen(false)}>
                         <Button className="w-full justify-center" variant="outline" size="lg">
                           Entrar
                         </Button>

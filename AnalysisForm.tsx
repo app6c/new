@@ -13,6 +13,7 @@ import Confirmation from './Confirmation';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
+import { useTranslation } from 'react-i18next';
 
 // Interface para a resposta da API
 interface AnalysisRequestAPIResponse {
@@ -48,11 +49,11 @@ const analysisFormSchema = z.object({
       path: ['deviceDetails']
     }),
   
-  // Step 2 - Photo Upload (opcionais para teste)
-  frontBodyPhoto: z.string().optional(),
-  backBodyPhoto: z.string().optional(),
-  seriousFacePhoto: z.string().optional(),
-  smilingFacePhoto: z.string().optional(),
+  // Step 2 - Photo Upload (obrigatórias para análise)
+  frontBodyPhoto: z.string().min(1, 'Foto frontal do corpo é obrigatória'),
+  backBodyPhoto: z.string().min(1, 'Foto das costas é obrigatória'),
+  seriousFacePhoto: z.string().min(1, 'Foto do rosto sério é obrigatória'),
+  smilingFacePhoto: z.string().min(1, 'Foto do rosto sorrindo é obrigatória'),
   
   // Step 3 - Priority Questionnaire
   priorityArea: z.enum(['health', 'relationships', 'professional']),
@@ -103,6 +104,7 @@ const AnalysisForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t } = useTranslation();
   
   // Initialize form with defaults
   const form = useForm<AnalysisFormData>({
@@ -155,8 +157,8 @@ const AnalysisForm: React.FC = () => {
       window.scrollTo(0, 0);
     } else {
       toast({
-        title: "Campos obrigatórios",
-        description: "Por favor, preencha todos os campos obrigatórios.",
+        title: t('errors.requiredFields'),
+        description: t('errors.fillRequiredFields'),
         variant: "destructive",
       });
     }
@@ -170,8 +172,8 @@ const AnalysisForm: React.FC = () => {
       const isValid = await form.trigger();
       if (!isValid) {
         toast({
-          title: "Formulário inválido",
-          description: "Por favor, verifique se preencheu todos os campos corretamente.",
+          title: t('errors.invalidForm'),
+          description: t('errors.checkAllFields'),
           variant: "destructive",
         });
         return;
@@ -180,8 +182,8 @@ const AnalysisForm: React.FC = () => {
       // Verificar se o usuário está autenticado
       if (!user || !user.id) {
         toast({
-          title: "Não autorizado",
-          description: "Você precisa estar logado para enviar uma análise.",
+          title: t('errors.unauthorized'),
+          description: t('errors.loginRequired'),
           variant: "destructive",
         });
         return;
@@ -197,26 +199,65 @@ const AnalysisForm: React.FC = () => {
       
       // Submit the data to the API
       try {
-        const response = await apiRequest('POST', '/api/analysis-requests', requestData);
-        const data = await response.json() as AnalysisRequestAPIResponse;
-        console.log("Resposta da API:", data);
+        console.log("Enviando dados para criar nova análise:", { 
+          userId: requestData.userId,
+          analysisFor: requestData.analysisFor,
+          priorityArea: requestData.priorityArea
+        });
         
-        if (data && data.requestId) {
+        const response = await apiRequest('POST', '/api/analysis-requests', requestData);
+        
+        // Verificar se a resposta é um objeto JSON ou uma resposta HTTP
+        if (response && typeof response === 'object' && 'requestId' in response) {
+          // Resposta já foi convertida para JSON
+          const data = response as AnalysisRequestAPIResponse;
+          console.log("Resposta da API (JSON):", data);
+          
           setRequestId(data.requestId);
           setCurrentStep(5);
           window.scrollTo(0, 0);
+        } else if (response && typeof response.json === 'function') {
+          // Resposta é um objeto Response
+          const data = await response.json() as AnalysisRequestAPIResponse;
+          console.log("Resposta da API (Response):", data);
+          
+          if (data && data.requestId) {
+            setRequestId(data.requestId);
+            setCurrentStep(5);
+            window.scrollTo(0, 0);
+          } else {
+            throw new Error(t('errors.requestIdNotReturned'));
+          }
         } else {
-          throw new Error("ID da solicitação não retornado pela API");
+          console.error("Resposta inesperada:", response);
+          throw new Error(t('errors.unexpectedResponse'));
         }
       } catch (error) {
         console.error("Erro durante o envio:", error);
+        
+        // Se for um erro de autenticação, redirecionar para a página de login
+        if (error instanceof Error && error.message.includes("401")) {
+          toast({
+            title: t('errors.sessionExpired'),
+            description: t('errors.loginAgain'),
+            variant: "destructive",
+          });
+          
+          // Redirecionar para a página de login após 2 segundos
+          setTimeout(() => {
+            window.location.href = "/auth";
+          }, 2000);
+          
+          return;
+        }
+        
         throw error;
       }
       
     } catch (error: any) {
       toast({
-        title: "Erro ao enviar",
-        description: error.message || "Ocorreu um erro ao enviar o formulário. Tente novamente.",
+        title: t('errors.submitError'),
+        description: error.message || t('errors.formSubmitError'),
         variant: "destructive",
       });
     } finally {
@@ -235,9 +276,9 @@ const AnalysisForm: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <header className="text-center mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2">Análise Emocional 6 Camadas</h1>
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2">{t('analysis.title')}</h1>
         <p className="text-slate-600 max-w-2xl mx-auto">
-          Descubra seu padrão predominante de personalidade e receba um guia estratégico personalizado para desbloqueio emocional.
+          {t('analysis.subtitle')}
         </p>
       </header>
 

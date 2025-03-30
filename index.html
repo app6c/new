@@ -1,15 +1,131 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAyNCIgaGVpZ2h0PSIxMDI0IiB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik01MTIgMTAyNEM3OTQuNzcgMTAyNCAxMDI0IDc5NC43NyAxMDI0IDUxMkMxMDI0IDIyOS4yMyA3OTQuNzcgMCA1MTIgMEMyMjkuMjMgMCAwIDIyOS4yMyAwIDUxMkMwIDc5NC43NyAyMjkuMjMgMTAyNCA1MTIgMTAyNFoiIGZpbGw9IiM1MjcxRkYiLz48cGF0aCBkPSJNNTEyIDc2OEM2NTAuMTQgNzY4IDc2OCA2NTAuMTQgNzY4IDUxMkM3NjggMzczLjg2IDY1MC4xNCAyNTYgNTEyIDI1NkMzNzMuODYgMjU2IDI1NiAzNzMuODYgMjU2IDUxMkMyNTYgNjUwLjE0IDM3My44NiA3NjggNTEyIDc2OFoiIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTUxMiA2NDBDNTU4Ljk5IDY0MCA1OTYgNjAyLjk5IDU5NiA1NTZDNTU4Ljk5IDUxMiA1MTIgNDc0Ljk5IDQ3MiA1MTJDNDM0Ljk5IDU1NiA0NjUuMDEgNjQwIDUxMiA2NDBaIiBmaWxsPSIjRkY3RDU0Ii8+PC9zdmc+" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Análise Emocional 6 Camadas</title>
-    <meta name="description" content="Descubra seu padrão predominante de personalidade e receba um guia estratégico e personalizado para desbloqueio emocional." />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análise Emocional</title>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4ecfb 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+        
+        .icon {
+            font-size: 5rem;
+            color: #007BFF;
+            margin-bottom: 1.5rem;
+            opacity: 0.8;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            font-size: 2.2rem;
+        }
+        
+        .subtitle {
+            color: #555;
+            margin-bottom: 2.5rem;
+            font-size: 1.1rem;
+            line-height: 1.5;
+            animation: fadeIn 0.8s ease-out 0.2s forwards;
+            opacity: 0;
+        }
+        
+        .buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            width: 100%;
+            animation: fadeIn 0.8s ease-out 0.4s forwards;
+            opacity: 0;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            flex: 1;
+            max-width: 150px;
+        }
+        
+        .btn-primary {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 123, 255, 0.2);
+        }
+        
+        .btn-primary:hover {
+            background-color: #0069d9;
+            box-shadow: 0 6px 10px rgba(0, 123, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .btn-outline {
+            background-color: transparent;
+            color: #007BFF;
+            border: 2px solid #007BFF;
+        }
+        
+        .btn-outline:hover {
+            background-color: rgba(0, 123, 255, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            .subtitle {
+                font-size: 1rem;
+            }
+            
+            .icon {
+                font-size: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">👤</div>
+        <h1>Análise Emocional</h1>
+        <p class="subtitle">Descubra sua personalidade e vire a chave da sua vida</p>
+        <div class="buttons">
+            <a href="/login" class="btn btn-outline">Login</a>
+            <a href="/cadastro" class="btn btn-primary">Cadastro</a>
+        </div>
+    </div>
+</body>
 </html>

@@ -1,42 +1,10 @@
-// Analysis form data types
-export interface InitialQuestionnaireData {
-  analysisFor: 'myself' | 'other';
-  otherReason?: string;
-  hadSurgery: boolean;
-  surgeryDetails?: string;
-  hadTrauma: boolean;
-  traumaDetails?: string;
-  usedDevice: boolean;
-  deviceDetails?: string;
-}
-
-export type PhotoType = 'frontBodyPhoto' | 'backBodyPhoto' | 'seriousFacePhoto' | 'smilingFacePhoto';
-
-export interface PhotoUploadData {
-  frontBodyPhoto?: string;
-  backBodyPhoto?: string;
-  seriousFacePhoto?: string;
-  smilingFacePhoto?: string;
-}
-
-export interface PriorityQuestionnaireData {
-  priorityArea: 'health' | 'relationships' | 'professional';
-  complaint1: string;
-  complaint2?: string;
-  complaint3?: string;
-}
-
-export type AnalysisFormData = InitialQuestionnaireData & PhotoUploadData & PriorityQuestionnaireData;
-
-// Step management
-export type FormStep = 1 | 2 | 3 | 4 | 5;
-
-// API response types
-export interface AnalysisRequestResponse {
-  requestId: string;
-  message: string;
-}
-
-export interface PaymentIntentResponse {
-  clientSecret: string;
-}
+export { default as AnalysisForm } from './AnalysisForm';
+export { default as InitialQuestionnaire } from './InitialQuestionnaire';
+export { default as PhotoUpload } from './PhotoUpload';
+export { default as PriorityQuestionnaire } from './PriorityQuestionnaire';
+export { default as SubmitForAnalysis } from './SubmitForAnalysis';
+export { default as Confirmation } from './Confirmation';
+export { default as ProgressTracker } from './ProgressTracker';
+export { default as FileUploadField } from './FileUploadField';
+export { default as ToggleableTextField } from './ToggleableTextField';
+export { default as StripeCheckout } from './StripeCheckout';

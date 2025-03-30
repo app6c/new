@@ -1,0 +1,73 @@
+## 🧩 Fluxo Completo da Análise Emocional com Base na Leitura Corporal
+
+---
+
+### ✅ **Etapa 6 – Análise Manual da Estrutura Corporal**
+
+**Responsável:** Profissional
+
+**Objetivo:** Preencher manualmente a pontuação de cada parte do corpo analisada a partir das 4 fotos enviadas pelo cliente:
+- Foto corpo inteiro de frente
+- Foto corpo inteiro de costas
+- Foto do rosto (sério)
+- Foto do rosto (sorrindo)
+
+**Execução:**
+- Para cada parte do corpo (Cabeça, Olhos, Boca, Tronco, Quadril, Pernas), distribuir exatamente **10 pontos** entre os 5 traços:
+  - 🧠 Criativo
+  - 💬 Conectivo
+  - 🔒 Forte
+  - 🧠 Líder
+  - ⚖️ Competitivo
+
+**Resultado:**
+- A tabela é preenchida e exibe automaticamente:
+  - 🔢 Total por traço
+  - 📈 Percentual por traço
+  - 🧠 Identifica os **Top 3 traços predominantes**
+- O cliente pode visualizar essa tabela, **mas não pode editá-la**
+
+---
+
+### ✅ **Etapa 7 – Virada de Chave (Devolutiva Personalizada)**
+
+**Objetivo:** Gerar uma devolutiva profunda e motivadora com base nas queixas do cliente e seus traços predominantes.
+
+**Dividida em três blocos principais:**
+
+#### 🔹 Bloco 1 – Resposta à(s) Queixa(s)
+- Identificar a área da vida correspondente (Pessoal, Relacionamentos ou Profissional)
+- Gerar um parágrafo empático com:
+  - Diagnóstico emocional
+  - Explicação do bloqueio com base nos traços
+  - Caminho de liberação através do Recurso
+
+#### 🔹 Bloco 2 – Devolutiva dos Top 3 Traços
+- Para cada traço:
+  - Percentual + nome do traço
+  - Comportamento na **Dor** ❌ e no **Recurso** ✅
+  - Dividido em 3 áreas:
+    - Pessoal (Sentir, Pensar, Expressar)
+    - Relacionamentos
+    - Profissional
+
+#### 🔹 Bloco 3 – Convite à Ação (Virada de Chave)
+- Criar campo aberto para o cliente escrever:
+  - Uma ação relacionada ao Recurso de cada traço
+  - Como manter esse traço ativo no dia a dia
+
+**Estilo da Devolutiva:**
+- Verdadeira, profunda, simples, emocional e educativa
+- Focada em desbloqueio, leveza e clareza
+
+---
+
+**Resultado Final:**
+- O cliente recebe um relatório com:
+  - Resposta às suas queixas
+  - Entendimento profundo dos seus traços
+  - Ações práticas para virar a chave
+  - Gráfico visual + PDF
+
+Esse é o ponto onde a transformação começa!
+
