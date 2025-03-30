@@ -1,14 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 import { 
   Loader2, FileText, AlertCircle, CheckCircle, 
   Clock, ArrowUpDown, Eye, Clipboard, CreditCard, Trash2
 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, isMobileDevice, mobileApiRequest } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import CheckoutModal from "@/components/EmotionalAnalysis/CheckoutModal";
@@ -50,8 +51,15 @@ interface AnalysisWithResult extends Omit<AnalysisRequest, 'hasResult'> {
 export default function MyAnalyses() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [analysisToDelete, setAnalysisToDelete] = useState<number | null>(null);
+  
+  // Definir o título da página
+  useEffect(() => {
+    document.title = t('myAnalyses.title');
+  }, [t]);
+  
   const [checkoutAnalysis, setCheckoutAnalysis] = useState<{
     requestId: string;
     details: {
@@ -61,22 +69,122 @@ export default function MyAnalyses() {
     };
   } | null>(null);
 
+  // Detectar se é um dispositivo móvel - log fora para diagnóstico
+  const isMobile = isMobileDevice();
+  console.log(`📱 Detecção de dispositivo mobile: ${isMobile ? "SIM" : "NÃO"}`);
+
+  // Solução de emergência - forçar URL completa para análises em vez de path relativo
+  const baseUrl = window.location.origin;
+  const analysisApiUrl = `${baseUrl}/api/user-analysis-requests?_=${Date.now()}`;
+  console.log(`📝 URL completa para API: ${analysisApiUrl}`);
+
+  // Usar estados locais para forçar recarregamento
+  const [forceRefresh, setForceRefresh] = useState(0);
+  
+  // Log do cookie de sessão (apenas o fato dele existir, não o valor)
+  console.log(`🍪 Cookie de sessão existe: ${document.cookie.includes('method6.sid')}`);
+  
   const {
     data: analyses,
     isLoading,
     error,
   } = useQuery<AnalysisWithResult[]>({
-    queryKey: ["/api/user-analysis-requests"],
+    queryKey: ["/api/user-analysis-requests", forceRefresh],
     queryFn: async () => {
       try {
-        // A apiRequest já retorna o JSON diretamente
-        return await apiRequest("GET", "/api/user-analysis-requests");
+        console.log("🔄 Iniciando requisição para análises, tentativa:", forceRefresh + 1);
+        
+        // Verificar se o usuário está autenticado antes de fazer a requisição
+        if (!user) {
+          console.log("⚠️ Usuário não está autenticado, abortando requisição");
+          return [];
+        }
+
+        // Abordagem direta - primeiro tentar requisição crua com todas as opções de cache desativadas
+        try {
+          console.log("🔍 Tentando requisição direta com URL completa:", analysisApiUrl);
+          
+          const response = await fetch(analysisApiUrl, {
+            method: 'GET',
+            credentials: 'include',
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          });
+          
+          console.log(`📊 Status da resposta direta: ${response.status}`);
+          
+          if (response.ok) {
+            try {
+              const responseText = await response.text();
+              console.log(`📄 Tamanho da resposta: ${responseText.length} caracteres`);
+              
+              if (!responseText || responseText.trim() === '') {
+                console.log("⚠️ Resposta vazia");
+                return [];
+              }
+              
+              try {
+                const data = JSON.parse(responseText);
+                console.log(`✅ Dados obtidos com sucesso: ${Array.isArray(data) ? data.length : 'não é array'} itens`);
+                
+                if (Array.isArray(data) && data.length > 0) {
+                  console.log(`📋 Primeira análise: ${JSON.stringify(data[0])}`);
+                }
+                
+                return Array.isArray(data) ? data : [];
+              } catch (parseError) {
+                console.error("❌ Erro ao parsear JSON:", parseError);
+                console.log("📜 Texto recebido:", responseText.substring(0, 200) + "...");
+                return [];
+              }
+            } catch (textError) {
+              console.error("❌ Erro ao ler texto da resposta:", textError);
+              return [];
+            }
+          } else if (response.status === 401) {
+            console.warn("🔒 Erro 401 - Não autorizado");
+            // Tentar login novamente - apenas log para diagnóstico
+            console.log("👤 Usuário atual:", user?.username);
+            return [];
+          } else {
+            console.error(`❌ Erro HTTP: ${response.status}`);
+            try {
+              const errorText = await response.text();
+              console.error("📜 Detalhes do erro:", errorText);
+            } catch (e) {
+              console.error("❌ Não foi possível ler detalhes do erro");
+            }
+            return [];
+          }
+        } catch (directError) {
+          console.error("❌ Falha na requisição direta:", directError);
+          
+          // Fallback - última chance - usar o mobileApiRequest
+          if (isMobile) {
+            console.log("📱 Tentativa final usando mobileApiRequest");
+            try {
+              const mobileResult = await mobileApiRequest("/api/user-analysis-requests");
+              return mobileResult;
+            } catch (mobileError) {
+              console.error("📱 Falha no mobileApiRequest:", mobileError);
+              return [];
+            }
+          }
+          
+          return [];
+        }
       } catch (err) {
-        console.error("Erro ao buscar dados do usuário:", err);
-        throw new Error("Falha ao buscar análises");
+        console.error("❌ Erro global na função de consulta:", err);
+        return [];
       }
     },
-    enabled: !!user,
+    enabled: true, // Sempre habilitado
+    retry: 3, // Tentar 3 vezes
+    staleTime: 0, // Nunca considerar fresco
   });
   
   // Mutação para excluir uma análise
@@ -125,31 +233,31 @@ export default function MyAnalyses() {
     switch (status) {
       case "aguardando_pagamento":
         return {
-          label: "Aguardando Pagamento",
+          label: t('analysis.status.waitingPayment'),
           color: "bg-yellow-500",
           icon: <Clock className="h-4 w-4" />,
         };
       case "aguardando_analise":
         return {
-          label: "Aguardando Análise",
+          label: t('analysis.status.waitingAnalysis'),
           color: "bg-blue-500",
           icon: <Clock className="h-4 w-4" />,
         };
       case "em_analise":
         return {
-          label: "Em Análise",
+          label: t('analysis.status.inAnalysis'),
           color: "bg-purple-500",
           icon: <Clipboard className="h-4 w-4" />,
         };
       case "concluido":
         return {
-          label: "Concluído",
+          label: t('analysis.status.completed'),
           color: "bg-green-500",
           icon: <CheckCircle className="h-4 w-4" />,
         };
       case "cancelado":
         return {
-          label: "Cancelado",
+          label: t('analysis.status.cancelled'),
           color: "bg-red-500",
           icon: <AlertCircle className="h-4 w-4" />,
         };
@@ -166,17 +274,22 @@ export default function MyAnalyses() {
   const getPriorityArea = (area: string) => {
     switch (area) {
       case "health":
-        return "Saúde";
+        return t('analysis.priorityAreas.health');
       case "relationships":
-        return "Relacionamentos";
+        return t('analysis.priorityAreas.relationships');
       case "professional":
-        return "Profissional";
+        return t('analysis.priorityAreas.professional');
+      case "personal":
+        return t('analysis.priorityAreas.personal');
       default:
         return area;
     }
   };
 
   // Filtrar análises por status e ordenar por ID (decrescente)
+  // Adicionar mais logs para debug
+  console.log("Dados recebidos analyses:", analyses);
+  
   const filteredAnalyses = Array.isArray(analyses) 
     ? analyses
         .filter((analysis) => {
@@ -184,6 +297,8 @@ export default function MyAnalyses() {
         })
         .sort((a, b) => b.id - a.id) // Ordenação decrescente por ID
     : [];
+    
+  console.log("Análises filtradas:", filteredAnalyses.length);
 
   if (isLoading) {
     return (
@@ -223,15 +338,15 @@ export default function MyAnalyses() {
       <AlertDialog open={!!analysisToDelete} onOpenChange={(open) => !open && setAnalysisToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir esta análise? Esta ação não pode ser desfeita.
-              <br /><br />
-              A análise será marcada como <strong>cancelada</strong> e será excluída permanentemente após 30 dias.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('analysis.actions.deleteConfirmation')}</AlertDialogTitle>
+            <AlertDialogDescription dangerouslySetInnerHTML={{ 
+              __html: t('analysis.actions.deleteQuestion') + 
+                '<br /><br />' + 
+                t('analysis.actions.deleteWarning')
+            }} />
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDeleteConfirm} 
               className="bg-destructive hover:bg-destructive/90"
@@ -240,10 +355,10 @@ export default function MyAnalyses() {
               {deleteMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Excluindo...
+                  {t('analysis.actions.deleting')}
                 </>
               ) : (
-                "Sim, excluir análise"
+                t('analysis.actions.confirmDelete')
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -252,13 +367,13 @@ export default function MyAnalyses() {
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Minhas Análises</h1>
+          <h1 className="text-3xl font-bold">{t('myAnalyses.title')}</h1>
           <p className="text-muted-foreground">
-            Veja o status de todas as suas análises emocionais
+            {t('myAnalyses.subtitle')}
           </p>
         </div>
         <Button asChild>
-          <Link href="/">Nova Análise</Link>
+          <Link href="/nova-analise">{t('myAnalyses.newAnalysisButton')}</Link>
         </Button>
       </div>
 
@@ -267,30 +382,37 @@ export default function MyAnalyses() {
         <div className="w-full md:w-1/4">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger>
-              <SelectValue placeholder="Filtrar por status" />
+              <SelectValue placeholder={t('analysis.actions.filterByStatus')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              <SelectItem value="aguardando_pagamento">Aguardando Pagamento</SelectItem>
-              <SelectItem value="aguardando_analise">Aguardando Análise</SelectItem>
-              <SelectItem value="em_analise">Em Análise</SelectItem>
-              <SelectItem value="concluido">Concluído</SelectItem>
-              <SelectItem value="cancelado">Cancelado</SelectItem>
+              <SelectItem value="all">{t('analysis.status.allStatus')}</SelectItem>
+              <SelectItem value="aguardando_pagamento">{t('analysis.status.waitingPayment')}</SelectItem>
+              <SelectItem value="aguardando_analise">{t('analysis.status.waitingAnalysis')}</SelectItem>
+              <SelectItem value="em_analise">{t('analysis.status.inAnalysis')}</SelectItem>
+              <SelectItem value="concluido">{t('analysis.status.completed')}</SelectItem>
+              <SelectItem value="cancelado">{t('analysis.status.cancelled')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
+      {/* Espaço para cabeçalho da tabela */}
+      <div className="mb-4"></div>
+
       {/* Tabela de análises */}
       {!filteredAnalyses || filteredAnalyses.length === 0 ? (
         <div className="text-center py-12 px-4 border rounded-lg">
           <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Nenhuma análise encontrada</h2>
+          <h2 className="text-2xl font-bold mb-2">{t('myAnalyses.noAnalysesFound')}</h2>
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-            Você ainda não tem análises ou não foram encontradas análises com o filtro aplicado.
+            {t('myAnalyses.noAnalysesDescription')}
+            <br/><br/>
+            <span className="text-blue-500">
+              {t('myAnalyses.requestNewAnalysis')}
+            </span>
           </p>
           <Button asChild>
-            <Link href="/">Solicitar Nova Análise</Link>
+            <Link href="/nova-analise">{t('myAnalyses.requestButton')}</Link>
           </Button>
         </div>
       ) : (
@@ -298,12 +420,12 @@ export default function MyAnalyses() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[50px]">ID</TableHead>
-                <TableHead className="w-[100px]">Data</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Área Prioritária</TableHead>
-                <TableHead>Queixa Principal</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead className="w-[50px]">{t('analysis.actions.id')}</TableHead>
+                <TableHead className="w-[100px]">{t('analysis.actions.date')}</TableHead>
+                <TableHead>{t('analysis.actions.status')}</TableHead>
+                <TableHead>{t('analysis.actions.priorityArea')}</TableHead>
+                <TableHead>{t('analysis.actions.mainComplaint')}</TableHead>
+                <TableHead className="text-right">{t('analysis.actions.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -324,12 +446,12 @@ export default function MyAnalyses() {
                     <TableCell>{analysis.complaint1}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {/* Botão para pagamento - mostrar apenas se aguardando pagamento */}
-                        {analysis.status === "aguardando_pagamento" && (
+                        {/* Botão para pagamento - mostrar apenas se aguardando pagamento e o usuário NÃO for admin */}
+                        {analysis.status === "aguardando_pagamento" && user?.role !== "admin" && (
                           <Button 
                             variant="default" 
                             size="sm" 
-                            title="Realizar pagamento" 
+                            title={t('analysis.payment.payNow')} 
                             className="bg-green-600 hover:bg-green-700"
                             onClick={() => setCheckoutAnalysis({
                               requestId: analysis.requestId,
@@ -341,16 +463,16 @@ export default function MyAnalyses() {
                             })}
                           >
                             <CreditCard className="h-4 w-4 mr-1" />
-                            Pagar Agora
+                            {t('analysis.actions.pay')}
                           </Button>
                         )}
 
                         {/* Botão para visualizar resultado - mostrar para análises concluídas */}
                         {analysis.status === "concluido" && (
-                          <Button variant="default" size="sm" asChild title="Ver resultado da análise">
+                          <Button variant="default" size="sm" asChild title={t('analysis.actions.viewResult')}>
                             <Link href={`/analysis/result/${analysis.requestId}`}>
                               <Eye className="h-4 w-4 mr-1" />
-                              Ver Resultado
+                              {t('analysis.actions.viewResult')}
                             </Link>
                           </Button>
                         )}
@@ -360,11 +482,11 @@ export default function MyAnalyses() {
                           <Button 
                             variant="destructive" 
                             size="sm" 
-                            title="Excluir análise"
+                            title={t('analysis.actions.delete')}
                             onClick={() => setAnalysisToDelete(analysis.id)}
                           >
                             <Trash2 className="h-4 w-4 mr-1" />
-                            Excluir
+                            {t('analysis.actions.delete')}
                           </Button>
                         )}
                       </div>

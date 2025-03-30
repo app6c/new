@@ -19,7 +19,9 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateLastLogin(userId: number): Promise<User | undefined>;
   getUsersByRole(role: string): Promise<User[]>;
+  getAllUsers(): Promise<User[]>;
   updateUserStatus(userId: number, status: string): Promise<User | undefined>;
+  updateUserPassword(userId: number, newPassword: string): Promise<User | undefined>;
 
   // Analysis Request methods
   createAnalysisRequest(request: InsertAnalysisRequest): Promise<AnalysisRequest>;
@@ -89,23 +91,26 @@ export class MemStorage implements IStorage {
 
     // Adicionar usuários iniciais
     this.createUser({
-      name: "Analista",
-      email: "analista@teste.com",
       username: "analista",
       password: "analista",
-      role: "admin",
-      acceptedTerms: true,
-      status: "active"
+      fullName: "Analista Teste",
+      email: "analista@teste.com"
+    }).then(user => {
+      // Atualizar para papel de administrador após criar
+      if (user) {
+        const updatedUser = {
+          ...user,
+          role: "admin" as "admin" | "client"
+        };
+        this.users.set(user.id, updatedUser);
+      }
     });
 
     this.createUser({
-      name: "Cliente Teste",
-      email: "cliente@teste.com",
       username: "teste",
       password: "teste",
-      role: "client",
-      acceptedTerms: true,
-      status: "active"
+      fullName: "Cliente Teste",
+      email: "cliente@teste.com"
     });
   }
 
@@ -129,14 +134,17 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
     const user: User = { 
-      ...insertUser, 
       id,
-      role: insertUser.role || "client",
-      status: insertUser.status || "active",
+      username: insertUser.username,
+      password: insertUser.password,
+      fullName: insertUser.fullName || null,
+      email: insertUser.email || null,
+      birthDate: insertUser.birthDate || null,
+      phone: insertUser.phone || null,
+      role: "client",
+      status: "active",
       createdAt: new Date().toISOString(),
-      lastLogin: null,
-      resetToken: null,
-      resetTokenExpiry: null
+      lastLogin: null
     };
     this.users.set(id, user);
     return user;
@@ -144,34 +152,56 @@ export class MemStorage implements IStorage {
 
   async updateLastLogin(userId: number): Promise<User | undefined> {
     const user = this.users.get(userId);
-    if (!user) return undefined;
-
-    const updatedUser = { 
-      ...user, 
-      lastLogin: new Date().toISOString()
-    };
-
-    this.users.set(userId, updatedUser);
-    return updatedUser;
+    if (user) {
+      const updatedUser = {
+        ...user,
+        lastLogin: new Date().toISOString()
+      };
+      this.users.set(userId, updatedUser);
+      return updatedUser;
+    }
+    return user;
   }
 
   async getUsersByRole(role: string): Promise<User[]> {
-    return Array.from(this.users.values()).filter(
-      (user) => user.role === role
-    );
+    // Usar o campo role para filtrar os usuários
+    return Array.from(this.users.values()).filter(user => user.role === role);
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    // Retornar todos os usuários
+    return Array.from(this.users.values());
   }
 
   async updateUserStatus(userId: number, status: string): Promise<User | undefined> {
     const user = this.users.get(userId);
-    if (!user) return undefined;
+    if (user) {
+      // Garantir que status seja um valor válido
+      const validStatus = status === "active" ? "active" : "inactive";
+      
+      // Atualizar o usuário com o novo status
+      const updatedUser = {
+        ...user,
+        status: validStatus as "active" | "inactive"
+      };
+      this.users.set(userId, updatedUser);
+      return updatedUser;
+    }
+    return user;
+  }
 
-    const updatedUser = { 
-      ...user, 
-      status: status as "active" | "inactive" | "suspended"
-    };
-
-    this.users.set(userId, updatedUser);
-    return updatedUser;
+  async updateUserPassword(userId: number, newPassword: string): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (user) {
+      // Atualizar o usuário com a nova senha
+      const updatedUser = {
+        ...user,
+        password: newPassword
+      };
+      this.users.set(userId, updatedUser);
+      return updatedUser;
+    }
+    return user;
   }
 
   // Analysis Request methods
@@ -203,6 +233,7 @@ export class MemStorage implements IStorage {
       status: 'aguardando_pagamento' as "aguardando_pagamento" | "aguardando_analise" | "em_analise" | "concluido" | "cancelado",
       paymentIntentId: null,
       amount: request.amount || 9700,
+      hasResult: false,
       lastUpdateAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     };
@@ -672,95 +703,88 @@ export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
-
-    if (!user) return undefined;
-
-    // Adicionar campos adicionais para compatibilidade com o resto do código
-    return {
-      ...user,
-      role: user.username === "analista" ? "admin" : "client",
-      name: user.username,
-      email: `${user.username}@exemplo.com`,
-      acceptedTerms: true,
-      createdAt: new Date().toISOString(),
-      lastLogin: null,
-      status: "active",
-      resetToken: null,
-      resetTokenExpiry: null
-    };
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username));
-
-    if (!user) return undefined;
-
-    // Adicionar campos adicionais para compatibilidade com o resto do código
-    return {
-      ...user,
-      role: user.username === "analista" ? "admin" : "client",
-      name: user.username,
-      email: `${user.username}@exemplo.com`,
-      acceptedTerms: true,
-      createdAt: new Date().toISOString(),
-      lastLogin: null,
-      status: "active",
-      resetToken: null,
-      resetTokenExpiry: null
-    };
+    return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    // Como não temos a coluna email no DB, retornamos undefined
-    return undefined;
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    // Como temos apenas id, username e password no DB, extrair campos necessários
     const userData = {
       username: insertUser.username,
       password: insertUser.password,
-      name: insertUser.username // Usar username como nome por padrão
+      fullName: insertUser.fullName || null,
+      email: insertUser.email || null,
+      birthDate: insertUser.birthDate || null,
+      phone: insertUser.phone || null,
+      role: "client",
+      status: "active",
+      createdAt: new Date().toISOString(),
     };
 
     const [user] = await db.insert(users).values(userData).returning();
-
-    // Simular campos adicionais para compatibilidade com o resto do código
-    return {
-      ...user,
-      role: insertUser.username === "analista" ? "admin" : "client",
-      name: insertUser.name || insertUser.username,
-      email: insertUser.email || "",
-      acceptedTerms: insertUser.acceptedTerms || true,
-      createdAt: new Date().toISOString(),
-      lastLogin: null,
-      status: "active",
-      resetToken: null,
-      resetTokenExpiry: null
-    };
+    return user;
   }
 
   async updateLastLogin(userId: number): Promise<User | undefined> {
-    // Como não temos a coluna lastLogin no DB, apenas retornamos o usuário atual
-    return this.getUser(userId);
+    const now = new Date().toISOString();
+    const [user] = await db
+      .update(users)
+      .set({ lastLogin: now })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
   }
 
   async getUsersByRole(role: string): Promise<User[]> {
-    // Como não temos a coluna role no DB, tratamos todos como o mesmo tipo
-    if (role === "admin") {
-      // Apenas retornar usuários cujo username seja "analista"
-      const allUsers = await db.select().from(users);
-      return allUsers.filter(user => user.username === "analista");
-    } else {
-      // Retornar todos os outros usuários
-      const allUsers = await db.select().from(users);
-      return allUsers.filter(user => user.username !== "analista");
-    }
+    return await db.select().from(users).where(eq(users.role, role));
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    // Retornar todos os usuários
+    return await db.select().from(users);
   }
 
   async updateUserStatus(userId: number, status: string): Promise<User | undefined> {
-    // Como não temos a coluna status no DB, apenas retornamos o usuário atual
-    return this.getUser(userId);
+    try {
+      // Garantir que status seja um valor válido
+      const validStatus = status === "active" ? "active" : "inactive";
+      
+      // Atualizar o status do usuário no banco de dados
+      const [updatedUser] = await db
+        .update(users)
+        .set({ status: validStatus as "active" | "inactive" })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      return updatedUser;
+    } catch (error) {
+      console.error("Erro ao atualizar status do usuário:", error);
+      return undefined;
+    }
+  }
+  
+  async updateUserPassword(userId: number, newPassword: string): Promise<User | undefined> {
+    try {
+      // Atualizar a senha do usuário no banco de dados
+      const [updatedUser] = await db
+        .update(users)
+        .set({ password: newPassword })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      return updatedUser;
+    } catch (error) {
+      console.error("Erro ao atualizar senha do usuário:", error);
+      return undefined;
+    }
   }
 
   async assignAnalystToRequest(requestId: number, analystId: number): Promise<AnalysisRequest | undefined> {
@@ -815,7 +839,7 @@ export class DatabaseStorage implements IStorage {
       requestId: uuidv4(),
       status: 'aguardando_pagamento',
       paymentIntentId: null,
-      lastUpdateAt: new Date().toISOString(),
+      // lastUpdateAt não existe na tabela, remover
       createdAt: new Date().toISOString()
     }).returning();
 
@@ -948,16 +972,52 @@ export class DatabaseStorage implements IStorage {
       validResult.caminhoLiberacao,
       validResult.traco1Nome,
       validResult.traco1Percentual,
-      validResult.traco1Dor,
-      validResult.traco1Recurso,
+      typeof validResult.traco1Dor === 'string' ? 
+        validResult.traco1Dor : 
+        JSON.stringify({
+          pessoal: validResult.traco1Dor?.pessoal || '',
+          relacionamentos: validResult.traco1Dor?.relacionamentos || '',
+          profissional: validResult.traco1Dor?.profissional || ''
+        }),
+      typeof validResult.traco1Recurso === 'string' ? 
+        validResult.traco1Recurso : 
+        JSON.stringify({
+          pessoal: validResult.traco1Recurso?.pessoal || '',
+          relacionamentos: validResult.traco1Recurso?.relacionamentos || '',
+          profissional: validResult.traco1Recurso?.profissional || ''
+        }),
       validResult.traco2Nome,
       validResult.traco2Percentual,
-      validResult.traco2Dor,
-      validResult.traco2Recurso,
+      typeof validResult.traco2Dor === 'string' ? 
+        validResult.traco2Dor : 
+        JSON.stringify({
+          pessoal: validResult.traco2Dor?.pessoal || '',
+          relacionamentos: validResult.traco2Dor?.relacionamentos || '',
+          profissional: validResult.traco2Dor?.profissional || ''
+        }),
+      typeof validResult.traco2Recurso === 'string' ? 
+        validResult.traco2Recurso : 
+        JSON.stringify({
+          pessoal: validResult.traco2Recurso?.pessoal || '',
+          relacionamentos: validResult.traco2Recurso?.relacionamentos || '',
+          profissional: validResult.traco2Recurso?.profissional || ''
+        }),
       validResult.traco3Nome,
       validResult.traco3Percentual,
-      validResult.traco3Dor,
-      validResult.traco3Recurso,
+      typeof validResult.traco3Dor === 'string' ? 
+        validResult.traco3Dor : 
+        JSON.stringify({
+          pessoal: validResult.traco3Dor?.pessoal || '',
+          relacionamentos: validResult.traco3Dor?.relacionamentos || '',
+          profissional: validResult.traco3Dor?.profissional || ''
+        }),
+      typeof validResult.traco3Recurso === 'string' ? 
+        validResult.traco3Recurso : 
+        JSON.stringify({
+          pessoal: validResult.traco3Recurso?.pessoal || '',
+          relacionamentos: validResult.traco3Recurso?.relacionamentos || '',
+          profissional: validResult.traco3Recurso?.profissional || ''
+        }),
       validResult.acaoTraco1,
       validResult.acaoTraco2,
       validResult.acaoTraco3,
@@ -1270,11 +1330,11 @@ ${result.caminhoLiberacao || ''}`,
   private calculateScoringTotals(table: any): any {
     const patternTypes = ["criativo", "conectivo", "forte", "lider", "competitivo"];
     const bodyParts = ["Head", "Chest", "Shoulder", "Back", "Legs"];
-    
+
     // Calcular totais por padrão
     const totals: Record<string, number> = {};
     const percentages: Record<string, number> = {};
-    
+
     // Inicializar totais
     patternTypes.forEach(pattern => {
       let total = 0;

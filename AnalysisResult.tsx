@@ -31,6 +31,7 @@ const LazyChart = lazy(() => import('@/components/EmotionalAnalysis/LazyChart'))
 // Deixar as bibliotecas de PDF como importações normais para evitar problemas
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import jspdfHtml2canvas from 'jspdf-html2canvas';
 
 // Função auxiliar para obter a porcentagem do padrão
 const getPatternPercentage = (patternName: string, table: any): number => {
@@ -50,10 +51,60 @@ export default function AnalysisResult() {
   const [error, setError] = useState<string | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  
+  // Estados para os convites à ação
+  const [acao1, setAcao1] = useState<string>("");
+  const [data1, setData1] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [acao2, setAcao2] = useState<string>("");
+  const [data2, setData2] = useState<string>(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 7);
+    return date.toISOString().split('T')[0];
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Refs para debounce
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Mutation para salvar as ações do cliente
+  const saveActionsMutation = useMutation({
+    mutationFn: async ({ acaoTraco1, acaoTraco2, data1, data2 }: { 
+      acaoTraco1?: string; 
+      acaoTraco2?: string;
+      data1?: string;
+      data2?: string;
+    }) => {
+      if (!analysisResult?.id) {
+        throw new Error("ID do resultado da análise não disponível");
+      }
+      
+      const updateData: any = {};
+      if (acaoTraco1 !== undefined) updateData.acaoTraco1 = acaoTraco1;
+      if (data1 !== undefined) updateData.dataAcaoTraco1 = data1;
+      if (acaoTraco2 !== undefined) updateData.acaoTraco2 = acaoTraco2;
+      if (data2 !== undefined) updateData.dataAcaoTraco2 = data2;
+      
+      return await apiRequest('PATCH', `/api/analysis-results/${analysisResult.id}`, updateData);
+    },
+    onSuccess: () => {
+      setIsSaving(false);
+      // Não invalidamos o cache aqui para evitar recarregamento da página
+    },
+    onError: (error) => {
+      console.error("Erro ao salvar ações:", error);
+      setIsSaving(false);
+      toast({
+        title: "Erro ao salvar suas ações",
+        description: error instanceof Error ? error.message : "Ocorreu um erro desconhecido",
+        variant: "destructive",
+      });
+    }
+  });
   
   // Mutation para regerar a análise
   const regenerateMutation = useMutation({
@@ -170,6 +221,45 @@ export default function AnalysisResult() {
       return () => clearInterval(interval);
     }
   }, [analysisRequest, analysisResult, refetchResult]);
+  
+  // Efeito para carregar os valores iniciais dos campos quando o resultado for carregado
+  React.useEffect(() => {
+    if (analysisResult) {
+      // Atualizar os estados com os valores do banco de dados
+      if (analysisResult.acaoTraco1) setAcao1(analysisResult.acaoTraco1);
+      if (analysisResult.acaoTraco2) setAcao2(analysisResult.acaoTraco2);
+      if (analysisResult.dataAcaoTraco1) setData1(analysisResult.dataAcaoTraco1);
+      if (analysisResult.dataAcaoTraco2) setData2(analysisResult.dataAcaoTraco2);
+    }
+  }, [analysisResult]);
+  
+  // Função para salvar ações com debounce
+  const saveActions = useCallback((
+    field: 'acaoTraco1' | 'acaoTraco2' | 'data1' | 'data2', 
+    value: string
+  ) => {
+    // Cancelar qualquer timeout pendente
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    // Definir estado de salvamento
+    setIsSaving(true);
+    
+    // Criar um novo timeout (debounce de 800ms)
+    saveTimeoutRef.current = setTimeout(() => {
+      // Preparar dados para salvar
+      const data: any = {};
+      
+      if (field === 'acaoTraco1') data.acaoTraco1 = value;
+      else if (field === 'acaoTraco2') data.acaoTraco2 = value;
+      else if (field === 'data1') data.dataAcaoTraco1 = value;
+      else if (field === 'data2') data.dataAcaoTraco2 = value;
+      
+      // Executar a mutation
+      saveActionsMutation.mutate(data);
+    }, 800);
+  }, [saveActionsMutation]);
   
   // Componente para mostrar o estado de carregamento mais amigável com skeletons
   const LoadingState = useCallback(() => {
@@ -549,26 +639,30 @@ export default function AnalysisResult() {
                   <div className="p-5 bg-white rounded-lg border shadow-sm print:border-dashed print:shadow-none">
                     <h4 className="text-lg font-semibold text-center mb-4 text-primary border-b border-primary/10 pb-2">Seus Padrões Emocionais Predominantes</h4>
                     <div className="flex flex-wrap justify-center gap-3 mb-5">
-                      {analysisResult.traco1Nome && analysisResult.traco1Percentual > 0 && (
-                        <div className="text-center p-3 bg-primary/5 rounded-lg border border-primary/20 min-w-[110px]">
-                          <div className="text-xl font-bold text-primary mb-1">{analysisResult.traco1Percentual}%</div>
-                          <div className="text-slate-700 font-medium text-sm">{analysisResult.traco1Nome}</div>
-                        </div>
-                      )}
-                      
-                      {analysisResult.traco2Nome && analysisResult.traco2Percentual > 0 && (
-                        <div className="text-center p-3 bg-primary/5 rounded-lg border border-primary/20 min-w-[110px]">
-                          <div className="text-xl font-bold text-primary mb-1">{analysisResult.traco2Percentual}%</div>
-                          <div className="text-slate-700 font-medium text-sm">{analysisResult.traco2Nome}</div>
-                        </div>
-                      )}
-                      
-                      {analysisResult.traco3Nome && analysisResult.traco3Percentual > 0 && (
-                        <div className="text-center p-3 bg-primary/5 rounded-lg border border-primary/20 min-w-[110px]">
-                          <div className="text-xl font-bold text-primary mb-1">{analysisResult.traco3Percentual}%</div>
-                          <div className="text-slate-700 font-medium text-sm">{analysisResult.traco3Nome}</div>
-                        </div>
-                      )}
+                      {/* Mostra todos os padrões presentes na tabela de pontuação que tenham valor maior que 0%, em ordem decrescente */}
+                      {bodyScoringTable && (() => {
+                        // Cria um array de padrões com seus percentuais
+                        const patterns = [
+                          { name: 'CRIATIVO', percentage: bodyScoringTable.creativoPercentage || 0 },
+                          { name: 'CONECTIVO', percentage: bodyScoringTable.conectivoPercentage || 0 },
+                          { name: 'FORTE', percentage: bodyScoringTable.fortePercentage || 0 },
+                          { name: 'LIDER', percentage: bodyScoringTable.liderPercentage || 0 },
+                          { name: 'COMPETITIVO', percentage: bodyScoringTable.competitivoPercentage || 0 }
+                        ];
+                        
+                        // Filtra apenas padrões com valor > 0% e ordena em ordem decrescente
+                        const significantPatterns = patterns
+                          .filter(pattern => pattern.percentage > 0)
+                          .sort((a, b) => b.percentage - a.percentage);
+                        
+                        // Renderiza os quadrinhos em ordem decrescente
+                        return significantPatterns.map(pattern => (
+                          <div key={pattern.name} className="text-center p-3 bg-primary/5 rounded-lg border border-primary/20 min-w-[110px]">
+                            <div className="text-xl font-bold text-primary mb-1">{pattern.percentage}%</div>
+                            <div className="text-slate-700 font-medium text-sm">{pattern.name}</div>
+                          </div>
+                        ));
+                      })()}
                     </div>
                     
                     <div className="text-center mb-2">
@@ -652,31 +746,15 @@ export default function AnalysisResult() {
                         </span>
                       </h5>
                       <div className="whitespace-pre-line text-gray-700 leading-relaxed">
-                        {analysisResult.block2PainDescription && typeof analysisResult.block2PainDescription === 'object' ? (
+                        {analysisResult?.traco1Dor ? (
                           <div>
-                            {analysisResult.block2PriorityArea === "PESSOAL" 
-                              ? analysisResult.block2PainDescription.pessoal
-                              : analysisResult.block2PriorityArea === "PROFISSIONAL"
-                                ? analysisResult.block2PainDescription.profissional 
-                                : analysisResult.block2PriorityArea === "RELACIONAMENTOS"
-                                  ? analysisResult.block2PainDescription.relacionamentos
-                                  : analysisRequest?.priorityArea === "health"
-                                    ? analysisResult.block2PainDescription.pessoal
-                                    : analysisRequest?.priorityArea === "professional"
-                                      ? analysisResult.block2PainDescription.profissional
-                                      : analysisRequest?.priorityArea === "relationships"
-                                        ? analysisResult.block2PainDescription.relacionamentos
-                                        : analysisResult.traco1Dor?.pessoal || ""}
-                          </div>
-                        ) : analysisResult.traco1Dor ? (
-                          <div>
-                            {analysisResult.priorityArea === "personal" || analysisResult.priorityArea === "health"
-                              ? analysisResult.traco1Dor.pessoal
-                              : analysisResult.priorityArea === "professional"
-                                ? analysisResult.traco1Dor.profissional
-                                : analysisResult.priorityArea === "relationships"
-                                  ? analysisResult.traco1Dor.relacionamentos
-                                  : analysisResult.traco1Dor.pessoal || ""}
+                            {analysisRequest?.priorityArea === "health" || analysisRequest?.priorityArea === "personal"
+                              ? analysisResult.traco1Dor.pessoal || 'Conteúdo de área pessoal não disponível'
+                              : analysisRequest?.priorityArea === "professional"
+                                ? analysisResult.traco1Dor.profissional || 'Conteúdo de área profissional não disponível'
+                                : analysisRequest?.priorityArea === "relationships"
+                                  ? analysisResult.traco1Dor.relacionamentos || 'Conteúdo de área de relacionamentos não disponível'
+                                  : 'Área prioritária não reconhecida'}
                           </div>
                         ) : (
                           <p>Não foram encontradas informações sobre o estado de dor.</p>
@@ -693,36 +771,18 @@ export default function AnalysisResult() {
                         </span>
                       </h5>
                       <div className="whitespace-pre-line text-gray-700 leading-relaxed">
-                        {analysisResult.caminhoLiberacao ? (
-                          // Usa o texto do campo caminhoLiberacao que contém a descrição completa dos recursos
-                          analysisResult.caminhoLiberacao
-                        ) : analysisResult.block2ResourceDescription && typeof analysisResult.block2ResourceDescription === 'object' ? (
-                          // Fallback para block2ResourceDescription se disponível
-                          analysisResult.block2PriorityArea === "PESSOAL" 
-                            ? analysisResult.block2ResourceDescription.pessoal || ""
-                            : analysisResult.block2PriorityArea === "PROFISSIONAL"
-                              ? analysisResult.block2ResourceDescription.profissional || ""
-                              : analysisResult.block2PriorityArea === "RELACIONAMENTOS"
-                                ? analysisResult.block2ResourceDescription.relacionamentos || ""
-                                : analysisRequest?.priorityArea === "health"
-                                  ? analysisResult.block2ResourceDescription.pessoal || ""
-                                  : analysisRequest?.priorityArea === "professional"
-                                    ? analysisResult.block2ResourceDescription.profissional || ""
-                                    : analysisRequest?.priorityArea === "relationships"
-                                      ? analysisResult.block2ResourceDescription.relacionamentos || ""
-                                      : ""
-                        ) : analysisResult.traco1Recurso && analysisResult.priorityArea ? (
-                          // Segundo fallback para traco1Recurso se disponível
-                          analysisResult.priorityArea === "personal" || analysisResult.priorityArea === "health"
-                            ? analysisResult.traco1Recurso.pessoal || ""
-                            : analysisResult.priorityArea === "professional"
-                              ? analysisResult.traco1Recurso.profissional || ""
-                              : analysisResult.priorityArea === "relationships"
-                                ? analysisResult.traco1Recurso.relacionamentos || ""
-                                : ""
+                        {analysisResult?.traco1Recurso ? (
+                          <div>
+                            {analysisRequest?.priorityArea === "health" || analysisRequest?.priorityArea === "personal"
+                              ? analysisResult.traco1Recurso.pessoal || 'Conteúdo de área pessoal não disponível'
+                              : analysisRequest?.priorityArea === "professional"
+                                ? analysisResult.traco1Recurso.profissional || 'Conteúdo de área profissional não disponível'
+                                : analysisRequest?.priorityArea === "relationships"
+                                  ? analysisResult.traco1Recurso.relacionamentos || 'Conteúdo de área de relacionamentos não disponível'
+                                  : 'Área prioritária não reconhecida'}
+                          </div>
                         ) : (
-                          // Mensagem se nenhum dado estiver disponível
-                          "Não foram encontradas informações sobre o estado de recurso."
+                          <p>Não foram encontradas informações sobre o estado de recurso.</p>
                         )}
                       </div>
                     </div>
@@ -747,14 +807,29 @@ export default function AnalysisResult() {
                             className="w-full bg-transparent border-none focus:outline-none resize-none text-gray-700" 
                             placeholder="Escreva aqui uma ação que você pode tomar imediatamente para ficar no estado de recurso..."
                             rows={3}
-                          ></textarea>
+                            value={acao1}
+                            onChange={(e) => {
+                              setAcao1(e.target.value);
+                              saveActions('acaoTraco1', e.target.value);
+                            }}
+                          />
                           <div className="mt-2 flex items-center gap-2">
                             <span className="text-sm font-medium text-gray-700">Data para executar:</span>
                             <input 
                               type="date" 
                               className="p-1 text-sm border border-gray-300 rounded bg-white" 
-                              defaultValue={new Date().toISOString().split('T')[0]}
+                              value={data1}
+                              onChange={(e) => {
+                                setData1(e.target.value);
+                                saveActions('data1', e.target.value);
+                              }}
                             />
+                            {isSaving && (
+                              <span className="ml-2 text-xs text-blue-500 flex items-center">
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                Salvando...
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -766,18 +841,29 @@ export default function AnalysisResult() {
                             className="w-full bg-transparent border-none focus:outline-none resize-none text-gray-700" 
                             placeholder="Anote aqui estratégias para manter padrões saudáveis no seu dia a dia..."
                             rows={3}
-                          ></textarea>
+                            value={acao2}
+                            onChange={(e) => {
+                              setAcao2(e.target.value);
+                              saveActions('acaoTraco2', e.target.value);
+                            }}
+                          />
                           <div className="mt-2 flex items-center gap-2">
                             <span className="text-sm font-medium text-gray-700">Data para implementar:</span>
                             <input 
                               type="date" 
                               className="p-1 text-sm border border-gray-300 rounded bg-white" 
-                              defaultValue={(() => {
-                                const date = new Date();
-                                date.setDate(date.getDate() + 7); // Data padrão +7 dias para começar a implementar
-                                return date.toISOString().split('T')[0];
-                              })()}
+                              value={data2}
+                              onChange={(e) => {
+                                setData2(e.target.value);
+                                saveActions('data2', e.target.value);
+                              }}
                             />
+                            {isSaving && (
+                              <span className="ml-2 text-xs text-blue-500 flex items-center">
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                Salvando...
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -826,34 +912,91 @@ export default function AnalysisResult() {
                   description: "Por favor, aguarde enquanto geramos o arquivo PDF...",
                 });
                 
-                const canvas = await html2canvas(resultRef.current, {
-                  scale: 2,
-                  logging: false,
-                  useCORS: true
-                });
-                
-                const imgData = canvas.toDataURL('image/jpeg', 1.0);
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                
-                // Calcular proporção para manter aspecto
-                const imgWidth = canvas.width;
-                const imgHeight = canvas.height;
-                const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-                const imgX = (pdfWidth - imgWidth * ratio) / 2;
-                const imgY = 10;
-                
-                pdf.addImage(imgData, 'JPEG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-                
-                // Adicionar rodapé
                 const today = new Date().toLocaleDateString('pt-BR');
-                pdf.setFontSize(10);
-                pdf.setTextColor(100, 100, 100);
-                pdf.text(`Análise Emocional 6 Camadas - Gerado em ${today}`, 10, pdfHeight - 10);
+                const fileName = `analise_emocional_${analysisRequest?.id}_${today}.pdf`;
                 
-                // Baixar PDF
-                pdf.save(`analise_emocional_${analysisRequest?.id}_${today}.pdf`);
+                // Usar a biblioteca jspdf-html2canvas que possui melhor suporte para múltiplas páginas
+                await jspdfHtml2canvas(resultRef.current, {
+                  // Configurar opções do PDF
+                  jsPDF: {
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                  },
+                  // Configurar opções para html2canvas
+                  html2canvas: {
+                    scale: 2,
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: true
+                  },
+                  // Configurações de saída do PDF
+                  outputFileName: fileName,
+                  // Configurações de página
+                  imageType: 'image/jpeg',
+                  imageQuality: 0.95,
+                  // Margens do conteúdo aumentadas (3.20 cm = 32 mm)
+                  margins: {
+                    top: 32,
+                    left: 12,
+                    right: 12,
+                    bottom: 32
+                  },
+                  // Personalização das páginas
+                  init: (pdfDoc) => {
+                    // Personalizar cada página
+                    pdfDoc.setFontSize(10);
+                    pdfDoc.setTextColor(100, 100, 100);
+                  },
+                  // Dividir o conteúdo em páginas distintas sem cortar informações importantes
+                  pagesplit: () => {
+                    // Selecionar todos os elementos importantes que devem ser mantidos intactos
+                    const mainSections: number[] = [];
+                    
+                    // 1. Cabeçalho com os padrões emocionais predominantes
+                    const headerSection = document.querySelector('.mb-6');
+                    if (headerSection) mainSections.push((headerSection as HTMLElement).offsetTop);
+                    
+                    // 2. Cada bloco numerado (1, 2, 3) representa uma quebra de página natural
+                    const blocks = document.querySelectorAll('.space-y-5');
+                    blocks.forEach(block => {
+                      const heading = block.querySelector('h4');
+                      if (heading && heading.textContent) {
+                        mainSections.push((block as HTMLElement).offsetTop);
+                      }
+                    });
+                    
+                    // 3. Identificar subseções dentro de cada bloco para garantir que conteúdos relacionados fiquem juntos
+                    const subSections = document.querySelectorAll('h5');
+                    subSections.forEach(section => {
+                      // Encontre o elemento pai que contenha todo o conteúdo relacionado a este título
+                      let container = section.closest('div');
+                      if (container && container.className.includes('space-y-5')) {
+                        // Não adicionar aqui porque já consideramos no passo 2
+                      } else if (container) {
+                        mainSections.push((container as HTMLElement).offsetTop);
+                      }
+                    });
+                    
+                    // 4. Garantir que os estados de dor e recurso não sejam separados
+                    const contentContainers = document.querySelectorAll('.p-5.bg-white.rounded-lg');
+                    contentContainers.forEach(container => {
+                      mainSections.push((container as HTMLElement).offsetTop);
+                    });
+                    
+                    // Ordenar os pontos de quebra e remover duplicatas
+                    const uniqueSections = Array.from(new Set(mainSections));
+                    return uniqueSections.sort((a, b) => a - b);
+                  },
+                  pageCallback: (pdf: any, pageNo: number, totalPages: number, progress: any) => {
+                    // Adicionar rodapé em cada página
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    pdf.setFontSize(10);
+                    pdf.setTextColor(100, 100, 100);
+                    // Posicionar o rodapé a 20mm da borda inferior
+                    pdf.text(`Análise Emocional 6 Camadas - Página ${pageNo} de ${totalPages} - Gerado em ${today}`, 12, pdfHeight - 20);
+                  }
+                });
                 
                 toast({
                   title: "PDF gerado com sucesso!",

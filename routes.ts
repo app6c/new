@@ -19,9 +19,7 @@ if (!stripeApiKey) {
   console.warn('Missing STRIPE_SECRET_KEY environment variable. Payment processing will not work.');
 }
 
-const stripe = stripeApiKey ? new Stripe(stripeApiKey, {
-  apiVersion: "2023-10-16" as any,
-}) : null;
+const stripe = stripeApiKey ? new Stripe(stripeApiKey) : null;
 
 // Helper function to save uploaded photo data or handle test paths
 const saveBase64Image = async (photoData: string, photoType: string): Promise<string> => {
@@ -69,6 +67,153 @@ const saveBase64Image = async (photoData: string, photoType: string): Promise<st
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Rota para obter todos os usuários do sistema (apenas administradores)
+  app.get("/api/users", isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { username, role, status } = req.query;
+      
+      let users;
+      
+      if (username) {
+        // Buscar usuários por nome de usuário
+        users = await storage.getAllUsers();
+        users = users.filter(user => 
+          user.username.toLowerCase().includes((username as string).toLowerCase())
+        );
+      } else if (role) {
+        // Buscar usuários por função (admin ou client)
+        users = await storage.getUsersByRole(role as string);
+      } else if (status) {
+        // Buscar usuários por status (active ou inactive)
+        users = await storage.getAllUsers();
+        users = users.filter(user => user.status === status);
+      } else {
+        // Buscar todos os usuários
+        users = await storage.getAllUsers();
+      }
+      
+      // Remover senhas por segurança
+      const safeUsers = users.map(user => {
+        const { password, ...safeUser } = user;
+        return safeUser;
+      });
+      
+      res.status(200).json(safeUsers);
+    } catch (error: any) {
+      console.error("Erro ao buscar usuários:", error);
+      res.status(500).json({ 
+        message: `Erro ao buscar usuários: ${error.message}`,
+        detail: error.stack
+      });
+    }
+  });
+
+  // Rota para obter um usuário específico por ID
+  app.get("/api/users/:id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.params.id);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ 
+          message: "ID do usuário inválido",
+          detail: "O ID do usuário deve ser um número"
+        });
+      }
+      
+      // Verificar se o usuário logado é administrador ou o próprio usuário
+      const isAdmin = req.user && (req.user as any).role === 'admin';
+      const isSelf = req.user && (req.user as any).id === userId;
+      
+      if (!isAdmin && !isSelf) {
+        return res.status(403).json({ 
+          message: "Acesso negado",
+          detail: "Você não tem permissão para ver este perfil de usuário"
+        });
+      }
+      
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ 
+          message: "Usuário não encontrado",
+          detail: `Não existe usuário com ID: ${userId}`
+        });
+      }
+      
+      // Remover senha por segurança
+      const { password, ...safeUser } = user;
+      
+      res.status(200).json(safeUser);
+    } catch (error: any) {
+      console.error("Erro ao buscar usuário:", error);
+      res.status(500).json({ 
+        message: `Erro ao buscar usuário: ${error.message}`,
+        detail: error.stack
+      });
+    }
+  });
+
+  // Rota para atualizar o status de um usuário (apenas administradores)
+  app.put("/api/users/:id/status", isAdmin, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { status } = req.body;
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ 
+          message: "ID do usuário inválido",
+          detail: "O ID do usuário deve ser um número"
+        });
+      }
+      
+      if (!status || (status !== 'active' && status !== 'inactive')) {
+        return res.status(400).json({ 
+          message: "Status inválido",
+          detail: "O status deve ser 'active' ou 'inactive'"
+        });
+      }
+      
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ 
+          message: "Usuário não encontrado",
+          detail: `Não existe usuário com ID: ${userId}`
+        });
+      }
+      
+      // Não permitir desativar o próprio usuário
+      if (req.user && (req.user as any).id === userId) {
+        return res.status(400).json({ 
+          message: "Operação não permitida",
+          detail: "Você não pode alterar seu próprio status"
+        });
+      }
+      
+      const updatedUser = await storage.updateUserStatus(userId, status);
+      
+      if (!updatedUser) {
+        return res.status(500).json({ 
+          message: "Erro ao atualizar status do usuário",
+          detail: "Não foi possível atualizar o status do usuário"
+        });
+      }
+      
+      // Remover senha por segurança
+      const { password, ...safeUser } = updatedUser;
+      
+      res.status(200).json({
+        message: `Status do usuário alterado para ${status}`,
+        user: safeUser
+      });
+    } catch (error: any) {
+      console.error("Erro ao atualizar status do usuário:", error);
+      res.status(500).json({ 
+        message: `Erro ao atualizar status do usuário: ${error.message}`,
+        detail: error.stack
+      });
+    }
+  });
   // Rota para criar um resultado de análise (Etapa 7 - Virada de Chave)
   app.post("/api/analysis-results", async (req: Request, res: Response) => {
     try {
@@ -385,39 +530,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(analysisRequest.userId);
       
       // Create a PaymentIntent with the order amount and currency
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: ANALYSIS_PRICE,
-        currency: "usd",
-        // Store the request ID in the metadata for reference
-        metadata: {
-          requestId: analysisRequest.requestId,
-          userId: analysisRequest.userId.toString(),
-          productName: "Análise Emocional 6 Camadas"
-        },
-        payment_method_types: ['card'],
-        payment_method_options: {
-          card: {
-            installments: {
-              enabled: true
+      console.log(`Criando PaymentIntent para requestId: ${requestId}, amount: ${ANALYSIS_PRICE}`);
+      
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: ANALYSIS_PRICE,
+          currency: "usd",
+          // Store the request ID in the metadata for reference
+          metadata: {
+            requestId: analysisRequest.requestId,
+            userId: analysisRequest.userId.toString(),
+            productName: "Análise Emocional 6 Camadas"
+          },
+          payment_method_types: ['card'],
+          payment_method_options: {
+            card: {
+              installments: {
+                enabled: true
+              }
             }
-          }
-        },
-        description: 'Análise Emocional 6 Camadas'
-      });
-      
-      // Atualizar o status da análise para "aguardando_pagamento" caso ainda não esteja
-      if (analysisRequest.status !== "aguardando_pagamento") {
-        await storage.updateAnalysisRequestStatus(analysisRequest.id, "aguardando_pagamento");
+          },
+          description: 'Análise Emocional 6 Camadas'
+        });
+        
+        // Atualizar o status da análise para "aguardando_pagamento" caso ainda não esteja
+        if (analysisRequest.status !== "aguardando_pagamento") {
+          await storage.updateAnalysisRequestStatus(analysisRequest.id, "aguardando_pagamento");
+        }
+        
+        // Update the analysis request with the payment intent ID
+        await storage.updateAnalysisRequestPayment(analysisRequest.id, paymentIntent.id);
+        
+        console.log(`Payment Intent criado para análise ID ${analysisRequest.id}, requestId ${requestId}, valor $97.00`);
+        
+        res.json({
+          clientSecret: paymentIntent.client_secret
+        });
+      } catch (stripeError) {
+        console.error('Erro ao criar PaymentIntent:', stripeError);
+        throw stripeError;
       }
-      
-      // Update the analysis request with the payment intent ID
-      await storage.updateAnalysisRequestPayment(analysisRequest.id, paymentIntent.id);
-      
-      console.log(`Payment Intent criado para análise ID ${analysisRequest.id}, requestId ${requestId}, valor $97.00`);
-      
-      res.json({
-        clientSecret: paymentIntent.client_secret
-      });
     } catch (err: any) {
       console.error('Error creating payment intent:', err);
       res.status(500).json({ message: err.message || "An error occurred while creating the payment intent" });
@@ -430,7 +582,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Stripe API key is not configured" });
     }
     
+    // Verificar se temos um payload
     const payload = req.body;
+    if (!payload) {
+      console.error('Webhook Stripe recebido sem payload');
+      return res.status(400).json({ message: "Webhook sem payload" });
+    }
+    
+    console.log('Webhook Stripe recebido:', payload.type);
     
     try {
       // Handle the event
@@ -439,36 +598,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const paymentIntent = payload.data.object;
           const requestId = paymentIntent.metadata.requestId;
           
+          console.log('Pagamento bem-sucedido para análise:', requestId);
+          
           if (requestId) {
             const analysisRequest = await storage.getAnalysisRequestByRequestId(requestId);
             if (analysisRequest) {
               await storage.updateAnalysisRequestStatus(analysisRequest.id, 'paid');
+              console.log(`Análise ID ${analysisRequest.id} marcada como paga após confirmação do Stripe`);
+            } else {
+              console.error(`Análise com requestId ${requestId} não encontrada no webhook`);
             }
+          } else {
+            console.error('Webhook de pagamento sem requestId na metadata');
           }
           break;
         default:
-          console.log(`Unhandled event type ${payload.type}`);
+          console.log(`Tipo de evento não tratado: ${payload.type}`);
       }
       
       res.status(200).json({ received: true });
     } catch (err: any) {
-      console.error('Error handling Stripe webhook:', err);
-      res.status(500).json({ message: err.message || "An error occurred while handling the Stripe webhook" });
+      console.error('Erro ao processar webhook do Stripe:', err);
+      res.status(500).json({ message: err.message || "Ocorreu um erro ao processar o webhook do Stripe" });
     }
   });
   
   // Rota para obter as análises do usuário atual
   app.get("/api/user-analysis-requests", async (req: Request, res: Response) => {
     try {
-      // Verificar se o usuário está autenticado e obter o ID do usuário
-      if (!req.isAuthenticated || !req.isAuthenticated()) {
+      // Verificar se é uma requisição mobile (timestamp ou user-agent)
+      const isMobileRequest = req.query._t || req.query._ || req.headers['user-agent']?.includes('Mobile');
+      console.log(`📱 Requisição para /api/user-analysis-requests - Mobile? ${isMobileRequest ? 'SIM' : 'NÃO'}`);
+      console.log(`📱 Headers completos:`, JSON.stringify(req.headers));
+      console.log(`📱 X-Mobile-Auth-Token:`, req.headers['x-mobile-auth-token']);
+      
+      // Para requisições mobile com token no header, buscar o usuário
+      if (isMobileRequest && req.headers['x-mobile-auth-token']) {
+        // Remover a validação de autenticação normal para mobile
+        console.log(`📱 Token de autenticação mobile encontrado, ignorando sessão`);
+        
+        // O middleware de autenticação mobile já deve ter definido req.user se o token for válido
+        if (req.user) {
+          console.log(`📱 Usuário autenticado por token mobile:`, (req.user as any).username);
+        } else {
+          console.warn(`📱 Token enviado, mas usuário não autenticado`);
+          return res.status(200).json([]); // Retornar array vazio para não quebrar a UI
+        }
+      }
+      // Verificação normal de autenticação para não-mobile
+      else if (!req.isAuthenticated || !req.isAuthenticated()) {
+        console.warn("⚠️ Acesso não autorizado para GET /api/user-analysis-requests");
+        
+        // Para requisições mobile, retornar array vazio em vez de erro 401
+        if (isMobileRequest) {
+          console.log(`📱 Retornando array vazio para dispositivo móvel em vez de erro 401`);
+          return res.status(200).json([]);
+        }
+        
         return res.status(401).json({ message: "Usuário não autenticado" });
       }
+      
+      // Log completo dos cookies e sessão
+      console.log("Cookies completos:", req.headers.cookie);
+      console.log("Sessão ID:", req.sessionID);
       
       const userId = (req.user as any).id;
       const userRole = (req.user as any).role;
       
       if (!userId) {
+        console.warn("⚠️ ID de usuário não encontrado em GET /api/user-analysis-requests");
+        
+        // Para requisições mobile, retornar array vazio em vez de erro 400
+        if (isMobileRequest) {
+          console.log(`📱 Retornando array vazio para dispositivo móvel em vez de erro 400`);
+          return res.status(200).json([]);
+        }
+        
         return res.status(400).json({ message: "ID de usuário não encontrado" });
       }
       
@@ -477,8 +682,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Se o usuário for um analista, retornar todas as análises
       let analysisRequests;
       if (userRole === 'admin' || userRole === 'analyst') {
+        // Importante: Aqui os administradores devem usar a rota específica /api/all-analysis-requests
+        // para não ter problemas de logout ao acessar "Minhas Análises" no mobile
+        // Mas temporariamente permitimos aqui também
         analysisRequests = await storage.getAllAnalysisRequests();
-        console.log(`Usuário é analista, buscando todas as análises`);
+        console.log(`Usuário é ${userRole}, buscando todas as análises`);
         
         // Obter informações do usuário para cada análise
         const usersPromises = analysisRequests.map(analysis => storage.getUser(analysis.userId));
@@ -525,13 +733,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Rota para obter todas as análises (apenas para analistas)
   app.get("/api/all-analysis-requests", async (req: Request, res: Response) => {
     try {
-      // Verificar se o usuário está autenticado e se é um analista
-      if (!req.isAuthenticated || !req.isAuthenticated()) {
+      // Verificar se é uma requisição mobile (timestamp ou user-agent)
+      const isMobileRequest = req.query._t || req.query._ || req.headers['user-agent']?.includes('Mobile');
+      console.log(`📱 Requisição para /api/all-analysis-requests - Mobile? ${isMobileRequest ? 'SIM' : 'NÃO'}`);
+      console.log(`📱 Headers completos (admin):`, JSON.stringify(req.headers));
+      console.log(`📱 X-Mobile-Auth-Token (admin):`, req.headers['x-mobile-auth-token']);
+      
+      // Para requisições mobile com token no header, buscar o usuário
+      if (isMobileRequest && req.headers['x-mobile-auth-token']) {
+        // Remover a validação de autenticação normal para mobile
+        console.log(`📱 Token de autenticação mobile encontrado, ignorando sessão`);
+        
+        // O middleware de autenticação mobile já deve ter definido req.user se o token for válido
+        if (req.user) {
+          console.log(`📱 Usuário autenticado por token mobile:`, (req.user as any).username);
+          
+          // Verificar se o usuário é analista
+          if ((req.user as any).username !== "analista") {
+            console.warn(`📱 Usuário autenticado por token, mas não é analista:`, (req.user as any).username);
+            return res.status(200).json([]); // Retornar array vazio para não quebrar a UI
+          }
+        } else {
+          console.warn(`📱 Token enviado, mas usuário não autenticado`);
+          return res.status(200).json([]); // Retornar array vazio para não quebrar a UI
+        }
+      }
+      // Verificação normal de autenticação para não-mobile
+      else if (!req.isAuthenticated || !req.isAuthenticated()) {
+        console.warn("⚠️ Acesso não autorizado para GET /api/all-analysis-requests - usuário não autenticado");
+        
+        // Para requisições mobile, retornar array vazio em vez de erro 401
+        if (isMobileRequest) {
+          console.log(`📱 Retornando array vazio para dispositivo móvel em vez de erro 401`);
+          return res.status(200).json([]);
+        }
+        
         return res.status(401).json({ message: "Usuário não autenticado" });
       }
       
+      // Log completo dos cookies e sessão
+      console.log("Cookies completos (admin):", req.headers.cookie);
+      console.log("Sessão ID (admin):", req.sessionID);
+      console.log("User info (admin):", req.user);
+      
       // Verificar se é um analista
       if ((req.user as any).username !== "analista") {
+        console.warn(`⚠️ Acesso não autorizado para GET /api/all-analysis-requests - usuário ${(req.user as any).username} não é analista`);
+        
+        // Para requisições mobile, retornar array vazio em vez de erro 403
+        if (isMobileRequest) {
+          console.log(`📱 Retornando array vazio para dispositivo móvel em vez de erro 403`);
+          return res.status(200).json([]);
+        }
+        
         return res.status(403).json({ message: "Acesso não autorizado. Apenas analistas podem acessar essa rota." });
       }
       
@@ -997,8 +1251,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Solicitação de análise não encontrada" });
       }
       
-      // Permitir regeneração se o usuário é dono da análise ou é o analista
-      if (analysisRequest.userId !== (req.user as any).id && (req.user as any).username !== 'analista') {
+      // Permitir regeneração se o usuário é dono da análise ou tem permissões de admin/analista
+      const isAdmin = (req.user as any).username === 'analista' || (req.user as any).username === 'admin';
+      if (analysisRequest.userId !== (req.user as any).id && !isAdmin) {
         return res.status(403).json({ message: "Acesso negado" });
       }
       
@@ -1034,28 +1289,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const priorityArea = areaMap[analysisRequest.priorityArea] || analysisRequest.priorityArea;
       
-      // Obter os nomes dos padrões predominantes em ordem
-      const patterns = [
-        { name: 'CRIATIVO', value: bodyScoringTable.creativoPercentage },
-        { name: 'CONECTIVO', value: bodyScoringTable.conectivoPercentage },
-        { name: 'FORTE', value: bodyScoringTable.fortePercentage },
-        { name: 'LIDER', value: bodyScoringTable.liderPercentage },
-        { name: 'COMPETITIVO', value: bodyScoringTable.competitivoPercentage }
-      ].sort((a, b) => b.value - a.value);
+      // Criar mapa de valores para cada padrão
+      const patternValues: Record<string, number> = {
+        'CRIATIVO': bodyScoringTable.creativoPercentage || 0,
+        'CONECTIVO': bodyScoringTable.conectivoPercentage || 0,
+        'FORTE': bodyScoringTable.fortePercentage || 0,
+        'LIDER': bodyScoringTable.liderPercentage || 0,
+        'COMPETITIVO': bodyScoringTable.competitivoPercentage || 0
+      };
       
-      // Os dois padrões mais predominantes que somam mais de 50%
-      const dominantPatterns = patterns.slice(0, 2);
-      const dominantSum = dominantPatterns[0].value + (dominantPatterns[1]?.value || 0);
+      // Respeitar a ordem dos padrões definidos na tabela de pontuação
+      const patterns = [];
+      
+      // Primeiro, adicionar os padrões primário, secundário e terciário conforme definidos na tabela
+      if (bodyScoringTable.primaryPattern && patternValues[bodyScoringTable.primaryPattern] > 0) {
+        patterns.push({ name: bodyScoringTable.primaryPattern, value: patternValues[bodyScoringTable.primaryPattern] });
+      }
+      
+      if (bodyScoringTable.secondaryPattern && patternValues[bodyScoringTable.secondaryPattern] > 0) {
+        patterns.push({ name: bodyScoringTable.secondaryPattern, value: patternValues[bodyScoringTable.secondaryPattern] });
+      }
+      
+      if (bodyScoringTable.tertiaryPattern && patternValues[bodyScoringTable.tertiaryPattern] > 0) {
+        patterns.push({ name: bodyScoringTable.tertiaryPattern, value: patternValues[bodyScoringTable.tertiaryPattern] });
+      }
+      
+      // Se não houver padrões suficientes definidos na tabela, adicionar outros padrões com valores positivos
+      if (patterns.length === 0) {
+        // Ordenar por valor em vez da ordem predefinida
+        const allPatterns = Object.entries(patternValues)
+          .filter(([_, value]) => value > 0)
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value);
+        
+        patterns.push(...allPatterns);
+      }
+      
+      // Definição da interface PatternItem para uso em todo o arquivo
+      interface PatternItem {
+        name: string;
+        value: number;
+        isPain?: boolean;
+      }
+      
+      const dominantPatterns: PatternItem[] = [];
+      
+      // Adicionar todos os padrões que tenham percentual >= 20%
+      for (const pattern of patterns) {
+        if (pattern.value >= 20) {
+          // Verificar se já temos este padrão em dominantPatterns
+          const existingPattern = dominantPatterns.find(p => p.name === pattern.name);
+          if (existingPattern) {
+            // Se o padrão já existe, somamos seus valores
+            existingPattern.value += pattern.value;
+          } else {
+            // Se o padrão não existe ainda, adicionamos
+            dominantPatterns.push({...pattern});
+          }
+        }
+      }
+      
+      // Caso não tenha padrões suficientes, usar pelo menos o primeiro
+      if (dominantPatterns.length === 0 && patterns.length > 0) {
+        dominantPatterns.push({...patterns[0]});
+      }
+      
+      // Ordenar padrões dominantes por valor decrescente
+      dominantPatterns.sort((a, b) => b.value - a.value);
       
       // Diagnóstico Emocional - Bloco 1
-      let diagnosticoEmocional = `Análise Emocional - Perfil ${dominantPatterns[0].name}\n\n`;
-      diagnosticoEmocional += `Olá! Analisei seu perfil emocional com base nas suas fotos e informações fornecidas.\n\n`;
-      diagnosticoEmocional += `Sua distribuição de padrões emocionais mostra uma predominância de ${dominantPatterns[0].name} (${dominantPatterns[0].value}%)`;
+      let diagnosticoEmocional = `Análise Emocional - Perfil `;
       
-      if (dominantPatterns[1]) {
-        diagnosticoEmocional += ` combinado com ${dominantPatterns[1].name} (${dominantPatterns[1].value}%), o que revela um perfil emocional interessante.\n\n`;
+      if (dominantPatterns.length > 1) {
+        const padroesList = dominantPatterns.map(p => `${p.name} (${p.value}%)`).join(" e ");
+        diagnosticoEmocional += `${padroesList}\n\n`;
+      } else if (dominantPatterns.length === 1) {
+        diagnosticoEmocional += `${dominantPatterns[0].name}\n\n`;
       } else {
-        diagnosticoEmocional += `, o que indica um perfil emocional bastante definido.\n\n`;
+        diagnosticoEmocional += `Emocional\n\n`;
+      }
+      
+      diagnosticoEmocional += `Olá! Analisei seu perfil emocional com base nas suas fotos e informações fornecidas.\n\n`;
+      
+      if (dominantPatterns.length > 1) {
+        const padroesListUnique = dominantPatterns.map(p => p.name).join(" e ");
+        diagnosticoEmocional += `Sua distribuição de padrões emocionais mostra uma predominância combinada de ${padroesListUnique}, o que revela um perfil emocional interessante e complexo.\n\n`;
+      } else if (dominantPatterns.length === 1) {
+        diagnosticoEmocional += `Sua distribuição de padrões emocionais mostra uma predominância de ${dominantPatterns[0].name} (${dominantPatterns[0].value}%), o que indica um perfil emocional bastante definido.\n\n`;
+      } else {
+        diagnosticoEmocional += `Sua distribuição de padrões emocionais revela um perfil equilibrado entre diferentes tendências.\n\n`;
       }
       
       // Adicionar informações sobre as queixas do cliente
@@ -1073,7 +1395,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       diagnosticoEmocional += `\nEsta análise fornecerá insights sobre como seu perfil emocional está relacionado com seus desafios atuais.`;
       
       // Explicação do Bloqueio - Parte do Bloco 1
-      let explicacaoBloqueio = `Bloqueios Emocionais - ${dominantPatterns[0].name}\n\n`;
+      let explicacaoBloqueio = `Bloqueios Emocionais - `;
+      
+      if (dominantPatterns.length > 1) {
+        explicacaoBloqueio += `Padrão Combinado\n\n`;
+      } else if (dominantPatterns.length === 1) {
+        explicacaoBloqueio += `${dominantPatterns[0].name}\n\n`;
+      } else {
+        explicacaoBloqueio += `Perfil Emocional\n\n`;
+      }
       
       // Descrições específicas para cada padrão
       const bloqueioPorPadrao: Record<string, string> = {
@@ -1088,59 +1418,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'COMPETITIVO': `O padrão COMPETITIVO traz bloqueios relacionados à ansiedade por resultados, comparação constante com outros e medo de perder oportunidades. Isso impacta diretamente sua área de ${priorityArea}, onde você pode estar se cobrando excessivamente e sentindo que nunca é suficiente.`
       };
       
-      // Adicionar descrição do padrão predominante
-      explicacaoBloqueio += bloqueioPorPadrao[dominantPatterns[0].name] || `O padrão ${dominantPatterns[0].name} está criando bloqueios na área de ${priorityArea} que precisam ser trabalhados.`;
-      
-      // Se houver um segundo padrão significativo, adicionar sua influência
-      if (dominantPatterns[1] && dominantPatterns[1].value > 20) {
-        explicacaoBloqueio += `\n\nAlém disso, a influência do padrão ${dominantPatterns[1].name} (${dominantPatterns[1].value}%) intensifica esses desafios, adicionando `;
+      // Combinando descrições de bloqueio para todos os padrões dominantes
+      if (dominantPatterns.length > 0) {
+        // Primeiro adicionar a descrição do padrão predominante
+        if (dominantPatterns[0] && bloqueioPorPadrao[dominantPatterns[0].name]) {
+          explicacaoBloqueio += bloqueioPorPadrao[dominantPatterns[0].name];
+        } else {
+          explicacaoBloqueio += `Seu padrão emocional predominante está criando bloqueios na área de ${priorityArea} que precisam ser trabalhados.`;
+        }
         
-        // Descrição da combinação
-        const combinacoes: Record<string, Record<string, string>> = {
-          'CRIATIVO': {
-            'CONECTIVO': `uma tendência à hipersensibilidade emocional e necessidade de validação`,
-            'FORTE': `um conflito entre expressão emocional e auto-controle`,
-            'LIDER': `uma pressão interna por perfeição e originalidade`,
-            'COMPETITIVO': `uma ansiedade constante por reconhecimento e destaque`
-          },
-          'CONECTIVO': {
-            'CRIATIVO': `uma maior sensibilidade às opiniões alheias e medo de rejeição`,
-            'FORTE': `um padrão de relacionamentos baseados em controle emocional`,
-            'LIDER': `uma tendência a buscar aprovação através de realizações`,
-            'COMPETITIVO': `uma necessidade de ser o preferido e indispensável aos outros`
-          },
-          'FORTE': {
-            'CRIATIVO': `uma dificuldade em expressar emoções de forma saudável`,
-            'CONECTIVO': `um padrão de controle nas relações interpessoais`,
-            'LIDER': `uma rigidez excessiva na busca por resultados`,
-            'COMPETITIVO': `uma pressão constante por demonstrar força e resistência`
-          },
-          'LIDER': {
-            'CRIATIVO': `uma autocobrança por inovação e excelência constantes`,
-            'CONECTIVO': `um uso do status e realizações para obter conexão e aprovação`,
-            'FORTE': `uma rigidez na forma de liderar e tomar decisões`,
-            'COMPETITIVO': `uma obsessão por estar sempre à frente e no controle`
-          },
-          'COMPETITIVO': {
-            'CRIATIVO': `uma necessidade de ser único e destacar-se constantemente`,
-            'CONECTIVO': `um padrão de competir por atenção e afeto`,
-            'FORTE': `uma inflexibilidade na maneira de buscar resultados`,
-            'LIDER': `uma comparação constante com outros líderes e referências`
+        // Se houver mais padrões, adicionar suas influências
+        if (dominantPatterns.length > 1) {
+          explicacaoBloqueio += `\n\nAlém disso, a influência `;
+          
+          for (let i = 1; i < dominantPatterns.length; i++) {
+            const pattern = dominantPatterns[i];
+            
+            if (i > 1) {
+              explicacaoBloqueio += i === dominantPatterns.length - 1 ? " e " : ", ";
+            }
+            
+            explicacaoBloqueio += `do padrão ${pattern.name} (${pattern.value}%)`;
           }
-        };
-        
-        // Adicionar a descrição específica da combinação ou uma genérica
-        explicacaoBloqueio += combinacoes[dominantPatterns[0].name]?.[dominantPatterns[1].name] || 
-          `elementos que intensificam os desafios do padrão predominante`;
-        
-        explicacaoBloqueio += `.`;
+          
+          explicacaoBloqueio += ` intensifica esses desafios, adicionando complexidade ao seu perfil emocional.`;
+        }
+      } else {
+        explicacaoBloqueio += `Seu perfil emocional apresenta bloqueios que estão afetando sua área de ${priorityArea} e precisam ser trabalhados para liberar seu potencial.`;
       }
       
       // Relacionar com as queixas específicas
       explicacaoBloqueio += `\n\nSuas queixas sobre "${analysisRequest.complaint1}"${analysisRequest.complaint2 ? ' e "' + analysisRequest.complaint2 + '"' : ''} são manifestações diretas desses bloqueios emocionais.`;
       
       // Caminho de Liberação - Também parte do Bloco 1
-      let caminhoLiberacao = `Caminhos para Liberação Emocional - ${dominantPatterns[0].name}\n\n`;
+      let caminhoLiberacao = `Caminhos para Liberação Emocional - `;
+      
+      if (dominantPatterns.length > 1) {
+        caminhoLiberacao += `Abordagem Integrada\n\n`;
+      } else if (dominantPatterns.length === 1) {
+        caminhoLiberacao += `${dominantPatterns[0].name}\n\n`;
+      } else {
+        caminhoLiberacao += `Equilíbrio Emocional\n\n`;
+      }
       
       // Sugestões específicas para cada padrão
       const liberacaoPorPadrao: Record<string, string> = {
@@ -1155,11 +1474,177 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'COMPETITIVO': `Para o padrão COMPETITIVO, o caminho de liberação envolve desenvolver autoaceitação, definir sucesso em termos pessoais e cultivar cooperação. Na área de ${priorityArea}, recomendo:\n\n1. Praticar gratidão pelo que já conquistou e pelo que já tem\n2. Focar em competir consigo mesmo, não com os outros\n3. Desenvolver projetos colaborativos que valorizem contribuições diversas\n4. Cultivar hobbies sem pressão por performance`
       };
       
-      // Adicionar liberação para o padrão predominante
-      caminhoLiberacao += liberacaoPorPadrao[dominantPatterns[0].name] || `Para trabalhar com o padrão ${dominantPatterns[0].name}, recomendo focar em desenvolver maior consciência emocional e praticar técnicas específicas de regulação.`;
+      // Combinar recomendações para todos os padrões dominantes
+      if (dominantPatterns.length > 0) {
+        caminhoLiberacao += `Considerando seu perfil emocional único, recomendo uma abordagem personalizada que integre estratégias para cada componente do seu padrão:\n\n`;
+        
+        for (let i = 0; i < dominantPatterns.length; i++) {
+          const pattern = dominantPatterns[i];
+          
+          if (liberacaoPorPadrao[pattern.name]) {
+            // Extrair apenas a parte principal do texto (sem a introdução)
+            const mainText = liberacaoPorPadrao[pattern.name].split("recomendo:")[1] || liberacaoPorPadrao[pattern.name];
+            caminhoLiberacao += `Para o componente ${pattern.name} (${pattern.value}%)${mainText}\n\n`;
+          }
+        }
+      } else {
+        caminhoLiberacao += `Para trabalhar com seu perfil emocional equilibrado, recomendo focar em desenvolver maior consciência emocional e praticar técnicas específicas de regulação em cada área.`;
+      }
       
       // Conclusão positiva
-      caminhoLiberacao += `\n\nEstes são apenas os primeiros passos. Ao avançar nesse caminho de autoconhecimento, você descobrirá novas camadas de compreensão sobre seus padrões emocionais e como transformá-los em recursos poderosos para sua vida.`;
+      caminhoLiberacao += `Estes são apenas os primeiros passos. Ao avançar nesse caminho de autoconhecimento, você descobrirá novas camadas de compreensão sobre seus padrões emocionais e como transformá-los em recursos poderosos para sua vida.`;
+      
+      // Criar informações de estado de dor e recurso para os padrões predominantes
+      // Vamos preparar os textos para os estados de dor e recurso para a área prioritária
+      // Aqui definimos as constantes para os estados de dor e recurso para cada padrão
+      const areaNormalizada = analysisRequest.priorityArea === 'health' ? 'pessoal' : 
+                              analysisRequest.priorityArea === 'personal' ? 'pessoal' : 
+                              analysisRequest.priorityArea === 'professional' ? 'profissional' : 
+                              analysisRequest.priorityArea === 'relationships' ? 'relacionamentos' : 'pessoal';
+      
+      // Vamos criar os objetos de dor e recurso com as áreas vazias
+      const traco1Dor = {
+        pessoal: '',
+        profissional: '',
+        relacionamentos: ''
+      };
+      
+      const traco1Recurso = {
+        pessoal: '',
+        profissional: '',
+        relacionamentos: ''
+      };
+      
+      // Utilizando a função de ajuda para obter os textos de dor
+      const getTextoDor = (patternName: string, area: string): string => {
+        const patternKey = patternName.toUpperCase();
+        let texto = '';
+        
+        if (patternKey.includes('CRIATIVO')) {
+          if (area === 'pessoal') {
+            texto = "O padrão CRIATIVO em estado de dor na área pessoal leva a uma hipersensibilidade emocional, autocrítica intensa e dificuldade em lidar com críticas. Você pode se sentir incompreendido, desvalorizado e com emoções intensas que são difíceis de gerenciar. Há uma tendência à dramatização e ao vitimismo, buscando validação externa para seu sofrimento.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão CRIATIVO em estado de dor na área de relacionamentos manifesta-se como dependência emocional e medo de abandono. Você tende a se sacrificar pelos outros, buscar aprovação constantemente e ter dificuldade em estabelecer limites saudáveis. Os relacionamentos podem se tornar dramas emocionais intensos, onde você se sente incompreendido e não valorizado.";
+          } else if (area === 'profissional') {
+            texto = "O padrão CRIATIVO em estado de dor na área profissional causa autossabotagem, perfeccionismo paralisante e medo de exposição. Você pode sentir que suas ideias nunca são boas o suficiente e temer julgamentos. Há dificuldade em finalizar projetos devido à autocrítica excessiva, e a comparação constante com outros pode bloquear sua criatividade natural.";
+          }
+        } else if (patternKey.includes('CONECTIVO')) {
+          if (area === 'pessoal') {
+            texto = "O padrão CONECTIVO em estado de dor na área pessoal manifesta-se como um sentimento profundo de insegurança e medo da solidão. Você tende a anular suas próprias necessidades, evitar conflitos a qualquer custo e buscar validação externa constante. Existe uma dificuldade significativa em dizer \"não\" e estabelecer limites saudáveis para si mesmo.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão CONECTIVO em estado de dor na área de relacionamentos expressa-se como codependência emocional e medo intenso de rejeição. Você pode se envolver em relacionamentos desequilibrados onde dá muito mais do que recebe, tem dificuldade em expressar necessidades próprias e pode permanecer em relações prejudiciais por medo da solidão.";
+          } else if (area === 'profissional') {
+            texto = "O padrão CONECTIVO em estado de dor na área profissional manifesta-se como uma dificuldade em tomar decisões autônomas e assumir posições de autoridade. Você tende a priorizar harmonia sobre produtividade, pode sentir ansiedade ao lidar com tarefas individuais e busca constantemente por aprovação e consenso, mesmo quando isso compromete a eficiência.";
+          }
+        } else if (patternKey.includes('FORTE')) {
+          if (area === 'pessoal') {
+            texto = "O padrão FORTE em estado de dor na área pessoal manifesta-se como rigidez emocional e dificuldade em demonstrar vulnerabilidade. Você tende a reprimir emoções, tem dificuldade em pedir ajuda e pode desenvolver problemas físicos devido à tensão acumulada. Há uma resistência a mudanças e um forte apego a rotinas e estruturas.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão FORTE em estado de dor na área de relacionamentos expressa-se como controle excessivo e dificuldade em confiar nos outros. Você pode ser percebido como inflexível, crítico e intimidador. Há uma tendência a manter distância emocional e evitar intimidade verdadeira por medo de perder o controle ou ser decepcionado.";
+          } else if (area === 'profissional') {
+            texto = "O padrão FORTE em estado de dor na área profissional manifesta-se como perfeccionismo rígido e microgerenciamento. Você pode ter dificuldade em delegar, resistência a novas ideias e métodos, e tende a se sobrecarregar por não confiar na competência alheia. O ambiente de trabalho pode se tornar tenso e pouco colaborativo sob sua influência.";
+          }
+        } else if (patternKey.includes('LIDER') || patternKey.includes('LÍDER')) {
+          if (area === 'pessoal') {
+            texto = "O padrão LÍDER em estado de dor na área pessoal manifesta-se como uma pressão constante por desempenho e medo do fracasso. Você tende a se definir exclusivamente por suas conquistas, tem dificuldade em relaxar sem culpa e pode desenvolver um senso de identidade frágil baseado apenas em realizações externas.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão LÍDER em estado de dor na área de relacionamentos expressa-se como competitividade e necessidade de controle. Você pode transformar relacionamentos em hierarquias, ter dificuldade em mostrar vulnerabilidade e confundir respeito com admiração. Há uma tendência a valorizar pessoas pelo status ou utilidade, não pela conexão emocional.";
+          } else if (area === 'profissional') {
+            texto = "O padrão LÍDER em estado de dor na área profissional manifesta-se como workaholism e ambição desmedida. Você pode sacrificar saúde e relacionamentos pelo sucesso, ter dificuldade em delegar por perfeccionismo e desenvolver ansiedade constante relacionada a desempenho e reconhecimento. Existe um medo persistente de ser ultrapassado ou tornar-se irrelevante.";
+          }
+        } else if (patternKey.includes('COMPETITIVO')) {
+          if (area === 'pessoal') {
+            texto = "O padrão COMPETITIVO em estado de dor na área pessoal manifesta-se como uma comparação constante com os outros e insatisfação crônica. Você tende a se cobrar excessivamente, tem dificuldade em celebrar conquistas e pode desenvolver ansiedade por sempre buscar ser melhor, mais rápido ou mais bem-sucedido em todos os aspectos da vida.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão COMPETITIVO em estado de dor na área de relacionamentos expressa-se como rivalidade e dificuldade em celebrar o sucesso alheio. Você pode transformar amizades em competições, ter ciúmes frequentes e buscar constantemente provar seu valor. As relações tornam-se campos de prova onde você precisa se destacar ou dominar.";
+          } else if (area === 'profissional') {
+            texto = "O padrão COMPETITIVO em estado de dor na área profissional manifesta-se como uma obsessão por resultados e status. Você tende a trabalhar compulsivamente, tem dificuldade com trabalho em equipe genuíno e pode desenvolver burnout por nunca sentir que fez o suficiente. Há uma tendência a sacrificar ética e bem-estar pela vitória.";
+          }
+        }
+        
+        return texto;
+      };
+      
+      // Utilizando a função de ajuda para obter os textos de recurso
+      const getTextoRecurso = (patternName: string, area: string): string => {
+        const patternKey = patternName.toUpperCase();
+        let texto = '';
+        
+        if (patternKey.includes('CRIATIVO')) {
+          if (area === 'pessoal') {
+            texto = "O padrão CRIATIVO em estado de recurso na área pessoal manifesta-se como expressão emocional autêntica e autocompaixão. Você desenvolve sensibilidade equilibrada, capacidade de processar emoções profundas e uma conexão genuína consigo mesmo. Sua intuição aguçada permite auto-conhecimento e transformação pessoal contínua.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão CRIATIVO em estado de recurso na área de relacionamentos expressa-se como empatia profunda e conexões autênticas. Você tem habilidade para compreender nuances emocionais, criar intimidade genuína e inspirar outros com sua autenticidade. Seus relacionamentos são caracterizados por profundidade emocional e aceitação mútua.";
+          } else if (area === 'profissional') {
+            texto = "O padrão CRIATIVO em estado de recurso na área profissional manifesta-se como inovação e expressão única. Você possui pensamento original, capacidade de ver possibilidades onde outros não veem e coragem para seguir caminhos não convencionais. Sua criatividade traz soluções inovadoras e inspira transformação nos ambientes de trabalho.";
+          }
+        } else if (patternKey.includes('CONECTIVO')) {
+          if (area === 'pessoal') {
+            texto = "O padrão CONECTIVO em estado de recurso na área pessoal manifesta-se como autoaceitação e equilíbrio emocional. Você desenvolve a capacidade de atender suas próprias necessidades enquanto permanece aberto aos outros, cultiva gentileza consigo mesmo e estabelece limites saudáveis sem culpa ou ansiedade.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão CONECTIVO em estado de recurso na área de relacionamentos expressa-se como conexões autênticas e reciprocidade. Você tem habilidade para construir relacionamentos baseados em respeito mútuo, comunicação honesta e apoio verdadeiro. Sua presença cria ambientes de confiança e compreensão onde todos se sentem acolhidos.";
+          } else if (area === 'profissional') {
+            texto = "O padrão CONECTIVO em estado de recurso na área profissional manifesta-se como colaboração eficaz e inteligência emocional. Você possui capacidade de construir equipes coesas, facilitar comunicação entre diferentes pessoas e criar ambientes de trabalho harmoniosos e produtivos. Sua habilidade natural para entender dinâmicas de grupo é um catalisador para projetos bem-sucedidos.";
+          }
+        } else if (patternKey.includes('FORTE')) {
+          if (area === 'pessoal') {
+            texto = "O padrão FORTE em estado de recurso na área pessoal manifesta-se como resiliência e estabilidade interna. Você desenvolve disciplina para criar hábitos saudáveis, capacidade de lidar com desafios sem ser abalado e uma base sólida que permite flexibilidade sem perder estrutura. Sua força interior se torna um alicerce para crescimento pessoal.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão FORTE em estado de recurso na área de relacionamentos expressa-se como lealdade e presença confiável. Você tem habilidade para oferecer apoio consistente, manter-se presente em momentos difíceis e construir relacionamentos duradouros baseados em confiança mútua. Sua estabilidade emocional proporciona segurança às pessoas próximas a você.";
+          } else if (area === 'profissional') {
+            texto = "O padrão FORTE em estado de recurso na área profissional manifesta-se como determinação e comprometimento exemplar. Você possui capacidade de enfrentar obstáculos com perseverança, manter o foco mesmo sob pressão e executar projetos até sua conclusão com qualidade consistente. Sua ética de trabalho torna-se referência e inspira confiança nos colegas.";
+          }
+        } else if (patternKey.includes('LIDER') || patternKey.includes('LÍDER')) {
+          if (area === 'pessoal') {
+            texto = "O padrão LÍDER em estado de recurso na área pessoal manifesta-se como autoconfiança equilibrada e propósito claro. Você desenvolve capacidade de traçar metas significativas, assumir responsabilidade pelo próprio crescimento e inspirar a si mesmo através de desafios. Seu senso de propósito transcende conquistas externas e abraça valores profundos.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão LÍDER em estado de recurso na área de relacionamentos expressa-se como mentoria e capacidade de elevar os outros. Você tem habilidade para reconhecer potencial nas pessoas, incentivar o crescimento de quem está ao seu redor e criar relacionamentos baseados em respeito mútuo e admiração autêntica. Sua influência positiva inspira transformação nos outros.";
+          } else if (area === 'profissional') {
+            texto = "O padrão LÍDER em estado de recurso na área profissional manifesta-se como visão estratégica e liderança inspiradora. Você possui capacidade de visualizar possibilidades futuras, mobilizar pessoas em direção a objetivos comuns e tomar decisões difíceis com sabedoria e consideração. Sua presença catalisa excelência e inovação no ambiente de trabalho.";
+          }
+        } else if (patternKey.includes('COMPETITIVO')) {
+          if (area === 'pessoal') {
+            texto = "O padrão COMPETITIVO em estado de recurso na área pessoal manifesta-se como autodisciplina e busca por excelência pessoal. Você desenvolve capacidade de estabelecer e alcançar metas desafiadoras, superar seus próprios limites e celebrar cada avanço no caminho. Seu impulso por melhoria contínua torna-se uma força positiva para evolução pessoal.";
+          } else if (area === 'relacionamentos') {
+            texto = "O padrão COMPETITIVO em estado de recurso na área de relacionamentos expressa-se como admiração genuína e capacidade de elevar os outros. Você tem habilidade para celebrar as conquistas alheias sem comparação, inspirar os outros a darem o melhor de si e criar relações onde todos se beneficiam do crescimento mútuo. Sua energia impulsiona todos ao seu redor.";
+          } else if (area === 'profissional') {
+            texto = "O padrão COMPETITIVO em estado de recurso na área profissional manifesta-se como busca por excelência e capacidade de superar desafios. Você possui determinação para alcançar resultados extraordinários, habilidade para trabalhar eficientemente sob pressão e visão para identificar oportunidades de melhoria. Sua energia e foco elevam o padrão de qualidade de toda a equipe.";
+          }
+        }
+        
+        return texto;
+      };
+      
+      // Combinar textos dos padrões dominantes na área prioritária
+      if (dominantPatterns.length > 0) {
+        for (const pattern of dominantPatterns) {
+          const textoDor = getTextoDor(pattern.name, areaNormalizada);
+          const textoRecurso = getTextoRecurso(pattern.name, areaNormalizada);
+          
+          if (textoDor) {
+            traco1Dor[areaNormalizada] += textoDor + "\n\n";
+          }
+          
+          if (textoRecurso) {
+            traco1Recurso[areaNormalizada] += textoRecurso + "\n\n";
+          }
+        }
+      }
+      
+      // Combinar os nomes dos padrões predominantes
+      const combinedPatternNames = dominantPatterns.map(p => p.name).join(", ");
+      
+      // Criar array ordenado de todos os padrões que têm valor > 0
+      const sortedPatterns: PatternItem[] = [];
+      
+      if (patternValues['CRIATIVO'] > 0) sortedPatterns.push({ name: 'CRIATIVO', value: patternValues['CRIATIVO'] });
+      if (patternValues['CONECTIVO'] > 0) sortedPatterns.push({ name: 'CONECTIVO', value: patternValues['CONECTIVO'] });
+      if (patternValues['FORTE'] > 0) sortedPatterns.push({ name: 'FORTE', value: patternValues['FORTE'] });
+      if (patternValues['LIDER'] > 0) sortedPatterns.push({ name: 'LIDER', value: patternValues['LIDER'] });
+      if (patternValues['COMPETITIVO'] > 0) sortedPatterns.push({ name: 'COMPETITIVO', value: patternValues['COMPETITIVO'] });
+      
+      // Ordenar por valor decrescente
+      sortedPatterns.sort((a, b) => b.value - a.value);
       
       // Atualizar o resultado com os novos textos gerados
       const updateData = {
@@ -1167,33 +1652,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         explicacaoBloqueio,
         caminhoLiberacao,
         
-        // Também atualizar os dados dos traços se necessário
-        traco1Nome: bodyScoringTable.primaryPattern || dominantPatterns[0].name,
-        traco1Percentual: dominantPatterns[0].value,
+        // Usar os padrões ordenados por percentual (maior para menor)
+        traco1Nome: sortedPatterns.length > 0 ? sortedPatterns[0].name : '',
+        traco1Percentual: sortedPatterns.length > 0 ? sortedPatterns[0].value : 0,
+        traco1Dor,
+        traco1Recurso,
         
-        traco2Nome: bodyScoringTable.secondaryPattern || dominantPatterns[1]?.name || '',
-        traco2Percentual: dominantPatterns[1]?.value || 0,
+        traco2Nome: sortedPatterns.length > 1 ? sortedPatterns[1].name : '',
+        traco2Percentual: sortedPatterns.length > 1 ? sortedPatterns[1].value : 0,
         
-        traco3Nome: bodyScoringTable.tertiaryPattern || patterns[2]?.name || '',
-        traco3Percentual: patterns[2]?.value || 0,
+        traco3Nome: sortedPatterns.length > 2 ? sortedPatterns[2].name : '',
+        traco3Percentual: sortedPatterns.length > 2 ? sortedPatterns[2].value : 0,
         
         // Informações para os blocos do estado de dor e recurso na área prioritária
         block2PriorityArea: priorityArea,
+        priorityArea: analysisRequest.priorityArea
       };
       
-      // Atualizar o resultado
-      await storage.updateAnalysisResult(currentResult.id, updateData);
-      console.log(`Resultado ID ${currentResult.id} atualizado com dados gerados automaticamente`);
+      // Atualizar o resultado com os novos dados
+      const updatedResult = await storage.updateAnalysisResult(currentResult.id, updateData);
       
-      // Marcar a análise como tendo resultado novamente
+      if (!updatedResult) {
+        return res.status(500).json({ message: "Erro ao atualizar o resultado da análise" });
+      }
+      
+      // Certificar-se de que a análise está marcada como tendo resultado
       await storage.markAnalysisRequestHasResult(id, true);
       console.log(`Análise ID ${id} marcada com hasResult = true após regeneração`);
       
-      // Retornar sucesso
+      // Recuperar a análise atualizada
       const updatedRequest = await storage.getAnalysisRequest(id);
-      const updatedResult = await storage.getAnalysisResult(id);
       
-      console.log(`Regeneração concluída para análise ID ${id}`);
+      if (updatedRequest) {
+        console.log(`Regeneração concluída para análise ID ${id}`);
+      }
       
       res.status(200).json({ 
         message: "Solicitação de regeneração da análise realizada com sucesso",
@@ -1257,6 +1749,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Serve static uploaded files
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  
+  // Serve static files for landing page
+  app.use('/landing', express.static(path.join(process.cwd(), 'client/landing')));
+  
+  // Rota para obter todos os usuários (apenas para admin/analistas)
+  app.get("/api/admin/users", async (req: Request, res: Response) => {
+    try {
+      // Verificar se o usuário está autenticado e é um analista
+      if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Usuário não autenticado" });
+      }
+      
+      if ((req.user as any).username !== 'analista') {
+        return res.status(403).json({ message: "Acesso negado. Apenas analistas podem ver todos os usuários." });
+      }
+      
+      // Obter usuários do armazenamento
+      const users = await storage.getUsersByRole('client');
+      
+      // Adicionar o usuário analista na lista
+      const adminUser = await storage.getUserByUsername('analista');
+      
+      const allUsers = adminUser ? [...users, adminUser] : users;
+      
+      // Excluir informações sensíveis como senhas
+      const safeUsers = allUsers.map(user => ({
+        id: user.id,
+        username: user.username,
+        role: user.username === 'analista' ? 'admin' : 'client',
+        status: user.status || "active",
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin
+      }));
+      
+      res.status(200).json(safeUsers);
+    } catch (err: any) {
+      console.error("Erro ao buscar usuários:", err);
+      res.status(500).json({ message: err.message || "Ocorreu um erro ao buscar os usuários" });
+    }
+  });
+  
+  // Rota para obter dados de um usuário específico
+  app.get("/api/admin/users/:id", async (req: Request, res: Response) => {
+    try {
+      // Verificar se o usuário está autenticado e é um analista
+      if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Usuário não autenticado" });
+      }
+      
+      if ((req.user as any).username !== 'analista') {
+        return res.status(403).json({ message: "Acesso negado. Apenas analistas podem visualizar este perfil." });
+      }
+      
+      const userId = parseInt(req.params.id);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ message: "ID de usuário inválido" });
+      }
+      
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+      
+      // Retornar uma versão segura do usuário (sem senha)
+      const safeUser = {
+        id: user.id,
+        username: user.username,
+        role: user.username === 'analista' ? 'admin' : 'client',
+        status: user.status || "active",
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin
+      };
+      
+      res.status(200).json(safeUser);
+    } catch (err: any) {
+      console.error("Erro ao buscar detalhes do usuário:", err);
+      res.status(500).json({ message: err.message || "Ocorreu um erro ao buscar detalhes do usuário" });
+    }
+  });
+
+  // Rota para atualizar o status de um usuário (ativar/desativar)
+  app.patch("/api/admin/users/:id/status", async (req: Request, res: Response) => {
+    try {
+      // Verificar se o usuário está autenticado e é um analista
+      if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Usuário não autenticado" });
+      }
+      
+      if ((req.user as any).username !== 'analista') {
+        return res.status(403).json({ message: "Acesso negado. Apenas analistas podem atualizar usuários." });
+      }
+      
+      const userId = parseInt(req.params.id);
+      const { status } = req.body;
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ message: "ID de usuário inválido" });
+      }
+      
+      if (!status || (status !== "active" && status !== "inactive")) {
+        return res.status(400).json({ message: "Status deve ser 'active' ou 'inactive'" });
+      }
+      
+      // Não permitir desativar o próprio usuário analista
+      if (userId === (req.user as any).id) {
+        return res.status(400).json({ message: "Não é possível alterar o status do seu próprio usuário" });
+      }
+      
+      const updatedUser = await storage.updateUserStatus(userId, status);
+      
+      if (!updatedUser) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+      
+      res.status(200).json({ 
+        message: `Usuário ${updatedUser.username} ${status === 'active' ? 'ativado' : 'desativado'} com sucesso`,
+        user: {
+          id: updatedUser.id,
+          username: updatedUser.username,
+          status: updatedUser.status
+        }
+      });
+    } catch (err: any) {
+      console.error("Erro ao atualizar usuário:", err);
+      res.status(500).json({ message: err.message || "Ocorreu um erro ao atualizar o usuário" });
+    }
+  });
+
+  // Rota para a página inicial de landing
+  app.get('/landing', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'client/landing/index.html'));
+  });
+  
+  // Rota para a raiz, redireciona para a landing page
+  app.get('/', (req, res) => {
+    res.redirect('/landing');
+  });
 
   const httpServer = createServer(app);
 

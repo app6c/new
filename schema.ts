@@ -7,14 +7,32 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  // Campos padrões para cliente
+  fullName: text("full_name"),
+  email: text("email"),
+  birthDate: text("birth_date"),
+  phone: text("phone"),
+  role: text("role", { enum: ['admin', 'client'] }).default('client').notNull(),
+  status: text("status", { enum: ['active', 'inactive'] }).default('active').notNull(),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+  lastLogin: text("last_login"),
 });
 
 export const insertUserSchema = createInsertSchema(users)
   .omit({ 
-    id: true
+    id: true, 
+    role: true, 
+    status: true, 
+    createdAt: true, 
+    lastLogin: true
   })
   .extend({
     password: z.string().min(3, "A senha deve ter pelo menos 3 caracteres"),
+    // Validações para os novos campos
+    fullName: z.string().optional(),
+    email: z.string().email("Email inválido").optional(),
+    birthDate: z.string().optional(),
+    phone: z.string().optional(),
   });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -48,8 +66,8 @@ export const analysisRequests = pgTable("analysis_requests", {
   paymentIntentId: text("payment_intent_id"),
   amount: integer("amount").notNull().default(9700), // in cents, so $97.00
   hasResult: boolean("has_result").default(false), // Indica se a análise tem um resultado disponível para visualização
-  // Campo analystId removido pois não existe na tabela física
-  // Campo lastUpdateAt removido pois não existe na tabela física
+  // Campo analystId removido pois não existe na tabela física 
+  lastUpdateAt: text("last_update_at").notNull().$defaultFn(() => new Date().toISOString()),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
 
@@ -60,6 +78,7 @@ export const analysisRequestSchema = createInsertSchema(analysisRequests)
     paymentIntentId: true, 
     status: true, 
     hasResult: true,
+    lastUpdateAt: true,
     createdAt: true
   })
   .extend({
@@ -76,11 +95,11 @@ export const analysisRequestSchema = createInsertSchema(analysisRequests)
     deviceDetails: z.string().optional(),
     complaint2: z.string().optional(),
     complaint3: z.string().optional(),
-    // Fotos opcionais para teste
-    frontBodyPhoto: z.string().optional(),
-    backBodyPhoto: z.string().optional(),
-    seriousFacePhoto: z.string().optional(),
-    smilingFacePhoto: z.string().optional(),
+    // Fotos obrigatórias para análise
+    frontBodyPhoto: z.string().min(1, "Foto frontal do corpo é obrigatória"),
+    backBodyPhoto: z.string().min(1, "Foto das costas é obrigatória"),
+    seriousFacePhoto: z.string().min(1, "Foto do rosto sério é obrigatória"),
+    smilingFacePhoto: z.string().min(1, "Foto do rosto sorrindo é obrigatória"),
     complaint1: z.string().min(1, "Pelo menos uma queixa é obrigatória"),
     amount: z.number().optional()
   });
@@ -216,6 +235,8 @@ export const analysisResults = pgTable("analysis_results", {
   // Bloco 3 - Convite à Ação (Virada de Chave)
   acaoTraco1: text("acao_traco1"),
   acaoTraco2: text("acao_traco2"),
+  dataAcaoTraco1: text("data_acao_traco1"),
+  dataAcaoTraco2: text("data_acao_traco2"),
   acaoTraco3: text("acao_traco3"),
   
   // Campos originais (mantidos para compatibilidade)

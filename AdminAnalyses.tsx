@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Loader2, FileText, AlertCircle, CheckCircle, Clock, ArrowUpDown, Eye, Pencil, BarChart, Play, Trash2 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, isMobileDevice, mobileApiRequest } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -49,7 +49,23 @@ export default function AdminAnalyses() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [userIdFilter, setUserIdFilter] = useState<number | null>(null);
   const [analysisToDelete, setAnalysisToDelete] = useState<number | null>(null);
+  
+  // Ler parâmetros da URL
+  const location = useLocation();
+  const params = new URLSearchParams(window.location.search);
+  const userIdParam = params.get('userId');
+  
+  // Se houver userId na URL, definir o filtro
+  useEffect(() => {
+    if (userIdParam) {
+      const userId = parseInt(userIdParam);
+      if (!isNaN(userId)) {
+        setUserIdFilter(userId);
+      }
+    }
+  }, [userIdParam]);
   
   // Mutação para excluir uma análise
   const deleteMutation = useMutation({
@@ -153,46 +169,110 @@ export default function AdminAnalyses() {
     queryKey: ["/api/all-analysis-requests"],
     queryFn: async () => {
       try {
-        // Usar a versão modificada do apiRequest que já retorna o JSON
-        const analysisData = await apiRequest("GET", "/api/all-analysis-requests");
+        // Verificar se o usuário está autenticado
+        if (!user || user.username !== "analista") {
+          console.log("Usuário não autenticado como analista, abortando requisição");
+          return [];
+        }
         
-        // Para cada análise, verificar se tem resultado e pontuação
-        const analysesWithDetails = await Promise.all(
-          analysisData.map(async (analysis: AnalysisRequest) => {
-            try {
-              // Verificar se há resultado de análise
-              const resultRes = await apiRequest("GET", `/api/analysis-results/${analysis.id}`);
-              const hasResult = !!resultRes;
-              
-              // Verificar se há tabela de pontuação
-              const scoringRes = await apiRequest("GET", `/api/body-scoring-tables/request/${analysis.id}`);
-              const hasScoring = !!scoringRes;
-              
-              return {
-                ...analysis,
-                hasResult,
-                hasScoring
-              };
-            } catch (error) {
-              // Se ocorrer um erro, significa que não há resultado ou pontuação
-              // Retornamos a análise sem os flags
-              console.log(`Erro ao buscar detalhes para análise ID ${analysis.id}:`, error);
-              return {
-                ...analysis,
-                hasResult: false,
-                hasScoring: false
-              };
+        console.log("Iniciando requisição para API de análises (admin)");
+        
+        // Verificar se é um dispositivo móvel
+        if (isMobileDevice()) {
+          console.log("📱 Detectado dispositivo móvel para admin, usando mobileApiRequest");
+          // Usar a função específica para mobile
+          const mobileResult = await mobileApiRequest("/api/all-analysis-requests");
+          console.log("📱 Dados mobile admin obtidos:", mobileResult ? mobileResult.length : 0);
+          
+          if (Array.isArray(mobileResult) && mobileResult.length > 0) {
+            // Simplificar para dispositivos móveis - não fazer verificações adicionais
+            return mobileResult.map(analysis => ({
+              ...analysis,
+              hasResult: analysis.hasResult || false,
+              hasScoring: false // Simplificar para mobile
+            }));
+          }
+        }
+        
+        try {
+          // Tentar com apiRequest primeiro
+          const analysisData = await apiRequest("GET", "/api/all-analysis-requests");
+          console.log("Dados de análises admin obtidos com sucesso:", analysisData ? analysisData.length : 0);
+          
+          if (Array.isArray(analysisData)) {
+            console.log("Tipos de análises admin recebidas:", analysisData.map(a => typeof a));
+            console.log("Primeira análise admin:", analysisData.length > 0 ? JSON.stringify(analysisData[0]) : "nenhuma");
+          } else {
+            console.log("Resultado admin não é um array:", typeof analysisData);
+            return [];
+          }
+          
+          // Para cada análise, verificar se tem resultado e pontuação
+          const analysesWithDetails = await Promise.all(
+            analysisData.map(async (analysis: AnalysisRequest) => {
+              try {
+                // Verificar se há resultado de análise
+                const resultRes = await apiRequest("GET", `/api/analysis-results/${analysis.id}`);
+                const hasResult = !!resultRes;
+                
+                // Verificar se há tabela de pontuação
+                const scoringRes = await apiRequest("GET", `/api/body-scoring-tables/request/${analysis.id}`);
+                const hasScoring = !!scoringRes;
+                
+                return {
+                  ...analysis,
+                  hasResult,
+                  hasScoring
+                };
+              } catch (error) {
+                // Se ocorrer um erro, significa que não há resultado ou pontuação
+                // Retornamos a análise sem os flags
+                console.log(`Erro ao buscar detalhes para análise ID ${analysis.id}:`, error);
+                return {
+                  ...analysis,
+                  hasResult: false,
+                  hasScoring: false
+                };
+              }
+            })
+          );
+          
+          return analysesWithDetails;
+        } catch (fetchErr) {
+          console.error("Erro na requisição para API de análises (admin):", fetchErr);
+          
+          // Tentar fazer requisição direta como fallback
+          console.log("Tentando fazer requisição direta como fallback (admin)");
+          const directResult = await fetch("/api/all-analysis-requests", {
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              "Pragma": "no-cache",
+              "Expires": "0"
             }
-          })
-        );
-        
-        return analysesWithDetails;
+          });
+          
+          if (directResult.ok) {
+            const data = await directResult.json();
+            console.log("Dados obtidos via fallback (admin):", data ? data.length : 0);
+            
+            // Não vamos fazer as requisições adicionais para verificar resultado e pontuação
+            // para manter a simplicidade do fallback
+            return data || [];
+          } else {
+            console.error("Requisição fallback também falhou (admin):", directResult.status);
+            return [];
+          }
+        }
       } catch (error) {
-        console.error("Erro ao buscar análises:", error);
-        throw new Error("Falha ao buscar análises");
+        console.error("Erro ao buscar análises (admin):", error);
+        return [];
       }
     },
-    enabled: !!user && user.username === "analista",
+    enabled: true, // Sempre habilitado, verificação interna
+    retry: 3, // Tentar três vezes
+    staleTime: 0, // Sempre considerado desatualizado
   });
 
   // Função para retornar o status traduzido e com estilo
@@ -254,12 +334,19 @@ export default function AdminAnalyses() {
   // Filtrar análises por status e termo de busca, e ordenar por ID (decrescente)
   const filteredAnalyses = analyses
     ?.filter((analysis) => {
+      // Filtro por status
       const matchesStatus = statusFilter === "all" || analysis.status === statusFilter;
+      
+      // Filtro por termo de busca
       const matchesSearch = 
         searchTerm === "" || 
         analysis.requestId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (analysis.complaint1 && analysis.complaint1.toLowerCase().includes(searchTerm.toLowerCase()));
-      return matchesStatus && matchesSearch;
+      
+      // Filtro por ID de usuário (se estiver definido)
+      const matchesUserId = userIdFilter === null || analysis.userId === userIdFilter;
+      
+      return matchesStatus && matchesSearch && matchesUserId;
     })
     .sort((a, b) => b.id - a.id); // Ordenação decrescente por ID
 
@@ -339,7 +426,38 @@ export default function AdminAnalyses() {
           <p className="text-muted-foreground">
             Visualize, analise e gerencie todas as solicitações de análise emocional
           </p>
+          
+          {/* Indicador de filtro de usuário */}
+          {userIdFilter && (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge className="bg-blue-500">Filtrado por Usuário ID: {userIdFilter}</Badge>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-7 px-2" 
+                onClick={() => {
+                  setUserIdFilter(null);
+                  window.history.pushState({}, '', '/admin/analyses');
+                }}
+              >
+                Limpar Filtro
+              </Button>
+            </div>
+          )}
         </div>
+        
+        {/* Botão para voltar à lista de usuários */}
+        {userIdFilter && (
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+          >
+            <Link href="/admin/users">
+              Voltar para Lista de Usuários
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* Filtros */}

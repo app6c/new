@@ -1,0 +1,922 @@
+{
+  "id": "00000000-0000-0000-0000-000000000000",
+  "prevId": "",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.analysis_results": {
+      "name": "analysis_results",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "analysis_request_id": {
+          "name": "analysis_request_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "personality_pattern": {
+          "name": "personality_pattern",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "analysis_report": {
+          "name": "analysis_report",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "strategic_guide": {
+          "name": "strategic_guide",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "personalized_tips": {
+          "name": "personalized_tips",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "diagnostico_emocional": {
+          "name": "diagnostico_emocional",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "explicacao_bloqueio": {
+          "name": "explicacao_bloqueio",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "caminho_liberacao": {
+          "name": "caminho_liberacao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco1_nome": {
+          "name": "traco1_nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco1_percentual": {
+          "name": "traco1_percentual",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco1_dor": {
+          "name": "traco1_dor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco1_recurso": {
+          "name": "traco1_recurso",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco2_nome": {
+          "name": "traco2_nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco2_percentual": {
+          "name": "traco2_percentual",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco2_dor": {
+          "name": "traco2_dor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco2_recurso": {
+          "name": "traco2_recurso",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco3_nome": {
+          "name": "traco3_nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco3_percentual": {
+          "name": "traco3_percentual",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco3_dor": {
+          "name": "traco3_dor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traco3_recurso": {
+          "name": "traco3_recurso",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "acao_traco1": {
+          "name": "acao_traco1",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "acao_traco2": {
+          "name": "acao_traco2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "acao_traco3": {
+          "name": "acao_traco3",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "analysis_results_analysis_request_id_analysis_requests_id_fk": {
+          "name": "analysis_results_analysis_request_id_analysis_requests_id_fk",
+          "tableFrom": "analysis_results",
+          "tableTo": "analysis_requests",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "analysis_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.emotional_patterns": {
+      "name": "emotional_patterns",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "pattern_type": {
+          "name": "pattern_type",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "area_type": {
+          "name": "area_type",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_pain": {
+          "name": "is_pain",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_username_unique": {
+          "columns": [
+            "username"
+          ],
+          "nullsNotDistinct": false,
+          "name": "users_username_unique"
+        }
+      },
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.body_scoring_table": {
+      "name": "body_scoring_table",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "analysis_request_id": {
+          "name": "analysis_request_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "criativo_head": {
+          "name": "criativo_head",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "criativo_chest": {
+          "name": "criativo_chest",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "criativo_shoulder": {
+          "name": "criativo_shoulder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "criativo_back": {
+          "name": "criativo_back",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "criativo_legs": {
+          "name": "criativo_legs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "conectivo_head": {
+          "name": "conectivo_head",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "conectivo_chest": {
+          "name": "conectivo_chest",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "conectivo_shoulder": {
+          "name": "conectivo_shoulder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "conectivo_back": {
+          "name": "conectivo_back",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "conectivo_legs": {
+          "name": "conectivo_legs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "forte_head": {
+          "name": "forte_head",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "forte_chest": {
+          "name": "forte_chest",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "forte_shoulder": {
+          "name": "forte_shoulder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "forte_back": {
+          "name": "forte_back",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "forte_legs": {
+          "name": "forte_legs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lider_head": {
+          "name": "lider_head",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lider_chest": {
+          "name": "lider_chest",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lider_shoulder": {
+          "name": "lider_shoulder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lider_back": {
+          "name": "lider_back",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lider_legs": {
+          "name": "lider_legs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "competitivo_head": {
+          "name": "competitivo_head",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "competitivo_chest": {
+          "name": "competitivo_chest",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "competitivo_shoulder": {
+          "name": "competitivo_shoulder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "competitivo_back": {
+          "name": "competitivo_back",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "competitivo_legs": {
+          "name": "competitivo_legs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "criativo_total": {
+          "name": "criativo_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "conectivo_total": {
+          "name": "conectivo_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "forte_total": {
+          "name": "forte_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lider_total": {
+          "name": "lider_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "competitivo_total": {
+          "name": "competitivo_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "criativo_percentage": {
+          "name": "criativo_percentage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "conectivo_percentage": {
+          "name": "conectivo_percentage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "forte_percentage": {
+          "name": "forte_percentage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lider_percentage": {
+          "name": "lider_percentage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "competitivo_percentage": {
+          "name": "competitivo_percentage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "primary_pattern": {
+          "name": "primary_pattern",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "secondary_pattern": {
+          "name": "secondary_pattern",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "tertiary_pattern": {
+          "name": "tertiary_pattern",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "scored_by": {
+          "name": "scored_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'analista'"
+        },
+        "scoring_notes": {
+          "name": "scoring_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "body_scoring_table_analysis_request_id_analysis_requests_id_fk": {
+          "name": "body_scoring_table_analysis_request_id_analysis_requests_id_fk",
+          "tableFrom": "body_scoring_table",
+          "tableTo": "analysis_requests",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "analysis_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "body_scoring_table_analysis_request_id_unique": {
+          "columns": [
+            "analysis_request_id"
+          ],
+          "nullsNotDistinct": false,
+          "name": "body_scoring_table_analysis_request_id_unique"
+        }
+      },
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.photo_uploads": {
+      "name": "photo_uploads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "analysis_request_id": {
+          "name": "analysis_request_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_type": {
+          "name": "photo_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "photo_path": {
+          "name": "photo_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "photo_uploads_analysis_request_id_analysis_requests_id_fk": {
+          "name": "photo_uploads_analysis_request_id_analysis_requests_id_fk",
+          "tableFrom": "photo_uploads",
+          "tableTo": "analysis_requests",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "analysis_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.analysis_requests": {
+      "name": "analysis_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "analysis_for": {
+          "name": "analysis_for",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "other_reason": {
+          "name": "other_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "had_surgery": {
+          "name": "had_surgery",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "surgery_details": {
+          "name": "surgery_details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "had_trauma": {
+          "name": "had_trauma",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trauma_details": {
+          "name": "trauma_details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "used_device": {
+          "name": "used_device",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device_details": {
+          "name": "device_details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "priority_area": {
+          "name": "priority_area",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "complaint_1": {
+          "name": "complaint_1",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "complaint_2": {
+          "name": "complaint_2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "complaint_3": {
+          "name": "complaint_3",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "front_body_photo": {
+          "name": "front_body_photo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "back_body_photo": {
+          "name": "back_body_photo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "serious_face_photo": {
+          "name": "serious_face_photo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "smiling_face_photo": {
+          "name": "smiling_face_photo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "payment_intent_id": {
+          "name": "payment_intent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 9700
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "analysis_requests_user_id_users_id_fk": {
+          "name": "analysis_requests_user_id_users_id_fk",
+          "tableFrom": "analysis_requests",
+          "tableTo": "users",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "analysis_requests_request_id_unique": {
+          "columns": [
+            "request_id"
+          ],
+          "nullsNotDistinct": false,
+          "name": "analysis_requests_request_id_unique"
+        }
+      },
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.session": {
+      "name": "session",
+      "schema": "",
+      "columns": {
+        "sid": {
+          "name": "sid",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sess": {
+          "name": "sess",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expire": {
+          "name": "expire",
+          "type": "timestamp(6)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "IDX_session_expire": {
+          "name": "IDX_session_expire",
+          "columns": [
+            {
+              "expression": "expire",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "timestamp_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "tables": {}
+  }
+}

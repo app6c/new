@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'wouter';
+import { useParams, Link, useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Clock, CreditCard, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -15,6 +16,20 @@ export default function PaymentPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  
+  // Redirecionar administradores para a página de análises
+  useEffect(() => {
+    if (user && user.role === "admin") {
+      toast({
+        title: "Acesso restrito",
+        description: "Administradores não precisam realizar pagamentos. Use a opção 'Aprovar pagamento' na interface de admin.",
+        variant: "destructive",
+      });
+      setLocation("/admin/analyses");
+    }
+  }, [user, toast, setLocation]);
 
   // Fetch analysis details
   useEffect(() => {
