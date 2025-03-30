@@ -1,0 +1,1677 @@
+import { useState, useEffect, useCallback } from "react";
+import { useParams, Link } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { Loader2, Save, CheckCircle2, ArrowLeft, AlertCircle, Sparkles, RefreshCw, XCircle, Edit, PencilRuler } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+
+// Definição de tipos para a página de Virada de Chave
+interface AnalysisRequest {
+  id: number;
+  requestId: string;
+  analysisFor: 'myself' | 'other';
+  otherReason?: string;
+  hadSurgery: boolean;
+  surgeryDetails?: string;
+  hadTrauma: boolean;
+  traumaDetails?: string;
+  usedDevice: boolean;
+  deviceDetails?: string;
+  priorityArea: 'health' | 'relationships' | 'professional';
+  complaint1: string;
+  complaint2?: string;
+  complaint3?: string;
+  status: string;
+  createdAt: string;
+}
+
+interface BodyScoringTable {
+  id: number;
+  analysisRequestId: number;
+  primaryPattern: string;
+  secondaryPattern: string;
+  tertiaryPattern: string;
+  creativoPercentage: number;
+  conectivoPercentage: number;
+  fortePercentage: number;
+  liderPercentage: number;
+  competitivoPercentage: number;
+  scoredBy: string;
+  scoringNotes?: string;
+}
+
+interface AnalysisResult {
+  id?: number;
+  analysisRequestId: number;
+  
+  // Bloco 1 - Resposta às Queixas
+  diagnosticoEmocional: string;
+  explicacaoBloqueio: string;
+  caminhoLiberacao: string;
+  
+  // Bloco 2 - Devolutiva dos Top 3 Traços
+  traco1Nome: string;
+  traco1Percentual: number;
+  traco1Dor: {
+    pessoal: string;
+    relacionamentos: string;
+    profissional: string;
+  };
+  traco1Recurso: {
+    pessoal: string;
+    relacionamentos: string;
+    profissional: string;
+  };
+  
+  traco2Nome: string;
+  traco2Percentual: number;
+  traco2Dor: {
+    pessoal: string;
+    relacionamentos: string;
+    profissional: string;
+  };
+  traco2Recurso: {
+    pessoal: string;
+    relacionamentos: string;
+    profissional: string;
+  };
+  
+  traco3Nome: string;
+  traco3Percentual: number;
+  traco3Dor: {
+    pessoal: string;
+    relacionamentos: string;
+    profissional: string;
+  };
+  traco3Recurso: {
+    pessoal: string;
+    relacionamentos: string;
+    profissional: string;
+  };
+  
+  // Bloco 3 - Convite à Ação (Virada de Chave) - Removido conforme solicitado
+  // Mantendo os campos para compatibilidade com o banco de dados
+  acaoTraco1?: string;
+  acaoTraco2?: string;
+  acaoTraco3?: string;
+  
+  // Campos originais mantidos
+  personalityPattern: string;
+  analysisReport: string;
+  strategicGuide: string;
+  personalizedTips: any;
+}
+
+interface EmotionalPattern {
+  id: number;
+  patternType: string;
+  areaType: string; 
+  isPain: boolean; 
+  description: string;
+}
+
+// Mapeia os nomes dos padrões emocionais para exibição em português
+const patternNames: Record<string, string> = {
+  "criativo": "CRIATIVO",
+  "conectivo": "CONECTIVO",
+  "forte": "FORTE",
+  "lider": "LÍDER",
+  "competitivo": "COMPETITIVO"
+};
+
+// Mapeia os nomes das áreas emocionais para exibição em português
+const areaNames: Record<string, string> = {
+  "health": "Saúde",
+  "relationships": "Relacionamentos",
+  "professional": "Profissional"
+};
+
+// Função para obter a cor do padrão emocional
+function getPatternColor(pattern: string): string {
+  switch (pattern.toLowerCase()) {
+    case 'criativo': return 'text-purple-600';
+    case 'conectivo': return 'text-blue-600';
+    case 'forte': return 'text-red-600';
+    case 'lider': return 'text-yellow-600';
+    case 'competitivo': return 'text-green-600';
+    default: return '';
+  }
+}
+
+// Componente principal
+function KeyTurnFeedbackForm() {
+  const { id } = useParams<{ id: string }>();
+  // Validação de ID mais robusta, garante número positivo
+  const analysisRequestId = id ? parseInt(id) : 0;
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState("bloco1");
+  
+  // Se o ID for inválido, mostre um erro no console
+  useEffect(() => {
+    if (!id || isNaN(analysisRequestId) || analysisRequestId <= 0) {
+      console.error("ID de análise inválido:", id, "- Convertido para:", analysisRequestId);
+    } else {
+      console.log("AnalysisKeyTurn - ID válido:", analysisRequestId, "string:", id);
+    }
+  }, [id, analysisRequestId]);
+  
+  // Estado para armazenar o formulário de feedback
+  const [feedbackForm, setFeedbackForm] = useState<Partial<AnalysisResult>>({
+    analysisRequestId,
+    diagnosticoEmocional: '',
+    explicacaoBloqueio: '',
+    caminhoLiberacao: '',
+    
+    traco1Nome: '',
+    traco1Percentual: 0,
+    traco1Dor: { pessoal: '', relacionamentos: '', profissional: '' },
+    traco1Recurso: { pessoal: '', relacionamentos: '', profissional: '' },
+    
+    traco2Nome: '',
+    traco2Percentual: 0,
+    traco2Dor: { pessoal: '', relacionamentos: '', profissional: '' },
+    traco2Recurso: { pessoal: '', relacionamentos: '', profissional: '' },
+    
+    traco3Nome: '',
+    traco3Percentual: 0,
+    traco3Dor: { pessoal: '', relacionamentos: '', profissional: '' },
+    traco3Recurso: { pessoal: '', relacionamentos: '', profissional: '' },
+    
+    personalityPattern: '',
+    analysisReport: '',
+    strategicGuide: '',
+    personalizedTips: {}
+  });
+  
+  // Consulta para obter os dados da análise
+  const { data: analysisRequest, isLoading: isLoadingAnalysis } = useQuery({
+    queryKey: ['/api/analysis-requests', analysisRequestId],
+    queryFn: async () => {
+      console.log("Buscando análise com ID numérico:", analysisRequestId);
+      
+      try {
+        const response = await fetch(`/api/analysis-requests/${analysisRequestId}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Erro ao buscar análise: ${response.status} - ${errorText}`);
+          throw new Error(`Erro ao buscar análise: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Análise encontrada com sucesso:", { id: data.id, requestId: data.requestId });
+        return data;
+      } catch (error) {
+        console.error("Erro ao buscar análise:", error);
+        throw error;
+      }
+    },
+    enabled: !!analysisRequestId && analysisRequestId > 0,
+    staleTime: 30 * 60 * 1000, // 30 minutos
+    refetchInterval: false,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false
+  });
+  
+  // Consulta para obter a tabela de pontuação do corpo
+  const { data: bodyScoringTable, isLoading: isLoadingScoring, error: bodyScoringError } = useQuery({
+    queryKey: ['/api/body-scoring-tables/request', analysisRequestId],
+    queryFn: async () => {
+      console.log("BodyScoringTable - analysisRequestId:", analysisRequestId, typeof analysisRequestId);
+      
+      try {
+        const response = await fetch(`/api/body-scoring-tables/request/${analysisRequestId}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Erro ao buscar tabela de pontuação: ${response.status} - ${errorText}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error("Erro ao buscar tabela de pontuação:", error);
+        throw error;
+      }
+    },
+    select: (data: BodyScoringTable) => data,
+    enabled: !!analysisRequestId && analysisRequestId > 0,
+    staleTime: 30 * 60 * 1000, // 30 minutos
+    refetchInterval: false,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false
+  });
+  
+  // Consulta para obter todos os padrões emocionais
+  const { data: emotionalPatterns, isLoading: isLoadingPatterns } = useQuery({
+    queryKey: ['/api/emotional-patterns'],
+    select: (data: EmotionalPattern[]) => data,
+    staleTime: 24 * 60 * 60 * 1000, // 24 horas (raramente muda)
+    refetchInterval: false,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false
+  });
+  
+  // Consulta para verificar se já existe um resultado de análise
+  const { data: existingResult, isLoading: isLoadingResult, error: existingResultError } = useQuery({
+    queryKey: ['/api/analysis-results', analysisRequestId],
+    queryFn: async () => {
+      console.log("Buscando resultado de análise para ID:", analysisRequestId);
+      
+      try {
+        const response = await fetch(`/api/analysis-results/${analysisRequestId}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log(`Resultado não encontrado - status ${response.status}: ${errorText}`);
+          return null; // Retornar null é OK, vamos criar um novo resultado
+        }
+        const data = await response.json();
+        console.log("Resultado encontrado:", { id: data.id, analysisRequestId: data.analysisRequestId });
+        return data;
+      } catch (error) {
+        console.error("Erro ao buscar resultado de análise:", error);
+        return null; // Retornar null é OK, vamos criar um novo resultado
+      }
+    },
+    enabled: !!analysisRequestId && analysisRequestId > 0,
+    select: (data: AnalysisResult | null) => data, // Pode retornar null
+    staleTime: 30 * 60 * 1000, // 30 minutos
+    refetchInterval: false,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false
+  });
+  
+  // Mutação para salvar ou atualizar o resultado da análise
+  const saveResultMutation = useMutation({
+    mutationFn: async (result: Partial<AnalysisResult>) => {
+      // Certifique-se de que o analysisRequestId está definido e é um número
+      if (!result.analysisRequestId || isNaN(Number(result.analysisRequestId))) {
+        console.error("ID da análise inválido:", result.analysisRequestId);
+        throw new Error(`ID da análise inválido ou não informado: ${result.analysisRequestId}`);
+      }
+      
+      // Converter para número se for uma string
+      if (typeof result.analysisRequestId === 'string') {
+        result.analysisRequestId = parseInt(result.analysisRequestId);
+      }
+      
+      console.log("Iniciando salvamento de análise, dados:", {
+        existingId: existingResult?.id,
+        analysisRequestId: result.analysisRequestId,
+        operation: existingResult?.id ? "PATCH" : "POST",
+        padrões: `${result.traco1Nome}, ${result.traco2Nome}, ${result.traco3Nome}`
+      });
+      
+      try {
+        if (existingResult?.id) {
+          return apiRequest("PATCH", `/api/analysis-results/${existingResult.id}`, result);
+        } else {
+          // Certifique-se de que todos os campos necessários estão definidos para um novo resultado
+          const newResult: Partial<AnalysisResult> = {
+            ...result,
+            analysisRequestId: Number(result.analysisRequestId),
+            completedAt: new Date().toISOString()
+          };
+          
+          console.log("Criando novo resultado de análise com dados:", {
+            analysisRequestId: newResult.analysisRequestId,
+            diagnosticoSize: newResult.diagnosticoEmocional?.length || 0,
+            bloqueioSize: newResult.explicacaoBloqueio?.length || 0,
+            caminhoSize: newResult.caminhoLiberacao?.length || 0
+          });
+          
+          return apiRequest("POST", "/api/analysis-results", newResult);
+        }
+      } catch (error) {
+        console.error("Erro durante operação de salvar análise:", error);
+        throw error;
+      }
+    },
+    onSuccess: async () => {
+      // Verificar se a análise já está concluída ou não
+      if (analysisRequest?.status !== "concluido") {
+        // Se não estiver concluída, atualizar para "concluido"
+        try {
+          const updateStatusResponse = await fetch(`/api/analysis-requests/${analysisRequestId}/status-concluido`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include'
+          });
+          
+          if (!updateStatusResponse.ok) {
+            console.error("Erro ao atualizar status da análise:", await updateStatusResponse.text());
+            toast({
+              title: "Aviso",
+              description: "A análise foi salva, mas houve um erro ao atualizar seu status para 'concluído'.",
+              variant: "warning",
+            });
+          } else {
+            console.log("Status da análise atualizado para 'concluido' com sucesso");
+          }
+        } catch (error) {
+          console.error("Erro ao tentar atualizar status da análise:", error);
+        }
+        
+        // Invalidar as consultas para atualizar os dados
+        queryClient.invalidateQueries({ queryKey: ['/api/analysis-results', analysisRequestId] });
+        queryClient.invalidateQueries({ queryKey: ['/api/analysis-requests', analysisRequestId] });
+        queryClient.invalidateQueries({ queryKey: ['/api/user-analysis-requests'] });
+        
+        toast({
+          title: "Análise concluída com sucesso!",
+          description: "A devolutiva foi registrada no sistema e está disponível para o cliente visualizar.",
+          variant: "default",
+        });
+      } else {
+        // Se já estiver concluída, apenas atualizar os resultados
+        // Invalidar as consultas para atualizar os dados
+        queryClient.invalidateQueries({ queryKey: ['/api/analysis-results', analysisRequestId] });
+        queryClient.invalidateQueries({ queryKey: ['/api/analysis-requests', analysisRequestId] });
+        queryClient.invalidateQueries({ queryKey: ['/api/user-analysis-requests'] });
+        
+        toast({
+          title: "Análise atualizada com sucesso!",
+          description: "As alterações foram salvas e os resultados atualizados para o cliente.",
+          variant: "default",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao salvar análise",
+        description: error.message || "Não foi possível salvar a análise. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Quando dados existentes forem carregados, preencha o formulário
+  useEffect(() => {
+    if (existingResult) {
+      setFeedbackForm(existingResult);
+    } else if (bodyScoringTable) {
+      // Preencha os dados iniciais do formulário com base na tabela de pontuação
+      setFeedbackForm(prev => ({
+        ...prev,
+        analysisRequestId,
+        traco1Nome: bodyScoringTable.primaryPattern,
+        traco1Percentual: getPercentageForPattern(bodyScoringTable, bodyScoringTable.primaryPattern),
+        traco2Nome: bodyScoringTable.secondaryPattern,
+        traco2Percentual: getPercentageForPattern(bodyScoringTable, bodyScoringTable.secondaryPattern),
+        traco3Nome: bodyScoringTable.tertiaryPattern,
+        traco3Percentual: getPercentageForPattern(bodyScoringTable, bodyScoringTable.tertiaryPattern),
+        personalityPattern: `${bodyScoringTable.primaryPattern}, ${bodyScoringTable.secondaryPattern}, ${bodyScoringTable.tertiaryPattern}`
+      }));
+    }
+  }, [existingResult, bodyScoringTable, analysisRequestId]);
+  
+  // Função auxiliar para obter a porcentagem para um determinado padrão
+  function getPercentageForPattern(table: BodyScoringTable, pattern: string): number {
+    switch (pattern.toLowerCase()) {
+      case 'criativo': return table.creativoPercentage;
+      case 'conectivo': return table.conectivoPercentage;
+      case 'forte': return table.fortePercentage;
+      case 'lider': return table.liderPercentage;
+      case 'competitivo': return table.competitivoPercentage;
+      default: return 0;
+    }
+  }
+  
+  // Função para mapear área de prioridade para o formato do objeto patternData
+  function mapAreaType(area: string): string {
+    switch (area.toLowerCase()) {
+      case 'health': return 'pessoal';
+      case 'relationships': return 'relacionamentos';
+      case 'professional': return 'profissional';
+      default: return 'pessoal'; // fallback para área pessoal
+    }
+  }
+  
+  // O efeito para o modo de revisão foi removido
+
+  // Renderiza o conteúdo do botão de salvar com base no status
+  function renderSaveButtonContent() {
+    if (saveResultMutation.isPending) {
+      return (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Salvando...
+        </>
+      );
+    } else if (analysisRequest?.status === "concluido") {
+      return (
+        <>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Atualizar Análise
+        </>
+      );
+    } else {
+      return (
+        <>
+          <Save className="mr-2 h-4 w-4" />
+          Gerar Virada de Chave
+        </>
+      );
+    }
+  }
+
+  // Função para garantir que o padrão emocional está no formato esperado (minúsculas)
+  function normalizePatternType(pattern: string): string {
+    if (!pattern) return 'criativo'; // fallback para o padrão Criativo
+    
+    const normalizedPattern = pattern.toLowerCase();
+    
+    // Verificar se o padrão é um dos válidos
+    if (['criativo', 'conectivo', 'forte', 'lider', 'competitivo'].includes(normalizedPattern)) {
+      return normalizedPattern;
+    }
+    
+    // Corrigir possíveis variações
+    if (normalizedPattern.includes('criativo')) return 'criativo';
+    if (normalizedPattern.includes('conectivo')) return 'conectivo';
+    if (normalizedPattern.includes('forte')) return 'forte';
+    if (normalizedPattern.includes('lider') || normalizedPattern.includes('líder')) return 'lider';
+    if (normalizedPattern.includes('competitivo')) return 'competitivo';
+    
+    // Se não conseguir normalizar, retorna criativo como fallback
+    console.warn(`Padrão não reconhecido: "${pattern}", usando "criativo" como fallback`);
+    return 'criativo';
+  }
+
+  // Função para gerar automaticamente o diagnóstico emocional
+  const generateDiagnostico = useCallback(() => {
+    if (!analysisRequest || !bodyScoringTable) {
+      toast({
+        title: "Dados insuficientes",
+        description: "Não foi possível gerar o diagnóstico automático. Verifique se todos os dados da análise estão disponíveis.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Obter padrões que somam mais de 50% do perfil emocional (normalizados)
+    const primaryPattern = normalizePatternType(bodyScoringTable.primaryPattern);
+    const secondaryPattern = normalizePatternType(bodyScoringTable.secondaryPattern);
+    const tertiaryPattern = normalizePatternType(bodyScoringTable.tertiaryPattern);
+    
+    const primaryPercentage = getPercentageForPattern(bodyScoringTable, bodyScoringTable.primaryPattern);
+    const secondaryPercentage = getPercentageForPattern(bodyScoringTable, bodyScoringTable.secondaryPattern);
+    const tertiaryPercentage = getPercentageForPattern(bodyScoringTable, bodyScoringTable.tertiaryPattern);
+    
+    // Imprimir os dados para debug
+    console.log("Pontuação da tabela:", {
+      padrões: [bodyScoringTable.primaryPattern, bodyScoringTable.secondaryPattern, bodyScoringTable.tertiaryPattern],
+      percentuais: [primaryPercentage, secondaryPercentage, tertiaryPercentage],
+      criativo: bodyScoringTable.creativoPercentage,
+      conectivo: bodyScoringTable.conectivoPercentage,
+      forte: bodyScoringTable.fortePercentage,
+      lider: bodyScoringTable.liderPercentage,
+      competitivo: bodyScoringTable.competitivoPercentage
+    });
+    
+    // Determinar quais padrões considerar
+    let patternsToConsider = [primaryPattern];
+    let totalPercentage = primaryPercentage;    // Sempre começamos com o padrão primário e incluímos padrões que somam mais de 50%
+    // E também incluímos padrões significativos (>15%)
+    
+    // Se o padrão primário já tiver mais de 50%, ainda podemos incluir o secundário 
+    // se ele for significativo (mais de 15%)
+    if (primaryPercentage >= 50) {
+      // Adicionamos o secundário se for significativo
+      if (secondaryPercentage >= 15) {
+        patternsToConsider.push(secondaryPattern);
+        totalPercentage += secondaryPercentage;
+        
+        // Mesmo se já tivermos mais de 50%, podemos adicionar o terciário
+        // se ele for significativo
+        if (tertiaryPercentage >= 15) {
+          patternsToConsider.push(tertiaryPattern);
+          totalPercentage += tertiaryPercentage;
+        }
+      }
+    } 
+    // Se o primário não alcançar 50%, adicionamos outros padrões até chegar a 50%
+    else if (secondaryPercentage > 0) {
+      patternsToConsider.push(secondaryPattern);
+      totalPercentage += secondaryPercentage;
+      
+      // Se ainda não chegarmos a 50%, adicionamos o terciário
+      if (totalPercentage < 50 && tertiaryPercentage > 0) {
+        patternsToConsider.push(tertiaryPattern);
+        totalPercentage += tertiaryPercentage;
+      }
+      // Se já chegamos a 50% e o terciário for significativo, também o incluímos
+      else if (totalPercentage >= 50 && tertiaryPercentage >= 15) {
+        patternsToConsider.push(tertiaryPattern);
+        totalPercentage += tertiaryPercentage;
+      }
+    }
+    
+    console.log("Padrões considerados para diagnóstico (>50%):", {
+      padrões: patternsToConsider,
+      percentualTotal: totalPercentage
+    });
+    
+    // Usar o padrão predominante como base, mas incorporar os outros na resposta
+    const patternType = primaryPattern;
+    
+    // Mapear a área de prioridade do formato da UI para o formato do objeto patternData
+    const originalAreaType = analysisRequest.priorityArea;
+    const areaType = mapAreaType(originalAreaType);
+    
+    console.log("Mapeamento de área:", {
+      original: originalAreaType,
+      mapeada: areaType
+    });
+    
+    // Palavras-chave das queixas para incorporar na resposta
+    const queixas = [
+      analysisRequest.complaint1, 
+      analysisRequest.complaint2, 
+      analysisRequest.complaint3
+    ].filter(Boolean).join(". ");
+    
+    // Mapeia os nomes dos padrões para português
+    const patternDisplay = patternNames[patternType] || patternType.toUpperCase();
+    const areaDisplay = areaNames[originalAreaType] || originalAreaType;
+    
+    // Agora usamos a função compartilhada getPatternData
+    
+    // Combinamos os dados de dor e recurso de todos os padrões relevantes
+    let dor = '';
+    let recurso = '';
+    
+    // Iteramos sobre todos os padrões considerados para combinar as descrições
+    patternsToConsider.forEach((pattern, index) => {
+      const patternDor = getPatternData(pattern, areaType, 'dor');
+      const patternRecurso = getPatternData(pattern, areaType, 'recurso');
+      
+      // Adicionamos o padrão com formatação adequada
+      if (index === 0) {
+        dor = patternDor;
+        recurso = patternRecurso;
+      } else {
+        dor += ` Além disso, ${patternDor.toLowerCase()}`;
+        recurso += ` Além disso, ${patternRecurso.toLowerCase()}`;
+      }
+    });
+    
+    // Prepara a descrição de padrões para incluir no diagnóstico
+    let patternsDescription = '';
+    if (patternsToConsider.length === 1) {
+      patternsDescription = `seu padrão ${patternDisplay} predominante (${Math.round(primaryPercentage)}%)`;
+    } else if (patternsToConsider.length === 2) {
+      const secondPattern = patternNames[secondaryPattern] || secondaryPattern.toUpperCase();
+      patternsDescription = `a combinação dos padrões ${patternDisplay} (${Math.round(primaryPercentage)}%) e ${secondPattern} (${Math.round(secondaryPercentage)}%)`;
+    } else if (patternsToConsider.length === 3) {
+      const secondPattern = patternNames[secondaryPattern] || secondaryPattern.toUpperCase();
+      const thirdPattern = patternNames[tertiaryPattern] || tertiaryPattern.toUpperCase();
+      patternsDescription = `a combinação dos padrões ${patternDisplay} (${Math.round(primaryPercentage)}%), ${secondPattern} (${Math.round(secondaryPercentage)}%) e ${thirdPattern} (${Math.round(tertiaryPercentage)}%)`;
+    }
+    
+    // Frases modelo para diagnóstico que serão combinadas randomicamente
+    const diagnosticoTemplates = [
+      `${patternsDescription} indica que você ${dor.toLowerCase()} Isso se reflete diretamente nas suas queixas relacionadas a "${queixas}".`,
+      `Analisando sua expressão corporal, identificamos ${patternsDescription}. Na área de ${areaDisplay}, isso se manifesta como: ${dor}`,
+      `Sua linguagem corporal revela ${patternsDescription} em estado de dor. Quando você menciona "${queixas}", está expressando diretamente como esse padrão emocional afeta sua vida.`,
+      `A análise mostra claramente que ${patternsDescription} está manifestando dificuldades na área de ${areaDisplay}. Suas queixas sobre "${queixas}" são sintomas dessa dinâmica emocional.`,
+      `${patternsDescription} é a base de sua expressão emocional atual. Na área de ${areaDisplay}, isso gera: ${dor} Esta configuração está diretamente relacionada às suas queixas: "${queixas}".`
+    ];
+    
+    // Frases modelo para explicação do bloqueio
+    const bloqueioTemplates = [
+      `O bloqueio emocional ocorre porque ${patternsDescription} em estado de dor faz com que você ${dor.toLowerCase()} Isso gera um ciclo onde quanto mais você tenta resolver, mais se frustra.`,
+      `Sua configuração emocional atual está travando sua evolução porque está operando no modo de sobrevivência. Com ${patternsDescription}, em vez de fluir naturalmente, você fica preso em ${dor.toLowerCase()}`,
+      `O bloqueio acontece quando ${patternsDescription} interpreta situações normais como ameaças. Isso faz com que você ${dor.toLowerCase()} criando resistência ao seu próprio crescimento.`,
+      `O que realmente está bloqueando seu avanço é a forma como ${patternsDescription} responde às situações. Em vez de usar seus recursos naturais, você fica preso em comportamentos como: ${dor.toLowerCase()}`,
+      `${patternsDescription} em estado de dor está criando uma estrutura rígida onde você ${dor.toLowerCase()} Isso explica porque você sente tanta dificuldade com "${queixas}".`
+    ];
+    
+    // Frases modelo para caminho de liberação
+    const liberacaoTemplates = [
+      `O caminho para liberar esse bloqueio é acessar os recursos naturais de ${patternsDescription}. Quando você ${recurso.toLowerCase()}, encontra fluidez e leveza.`,
+      `Para superar esse bloqueio, você precisa migrar do estado de dor para o estado de recurso dos padrões identificados. Com ${patternsDescription}, isso significa ${recurso.toLowerCase()}`,
+      `A liberação desse bloqueio vem quando você reconhece que ${patternsDescription} tem recursos poderosos: ${recurso} Cultivar esses aspectos trará transformação real.`,
+      `Seu caminho de liberação está em conectar-se com as qualidades de ${patternsDescription} em estado de recurso: ${recurso} Isso dissolverá naturalmente as queixas que você menciona.`,
+      `Para transformar esse bloqueio em força, acesse os recursos de ${patternsDescription}: ${recurso} Quando você opera desse lugar, as situações que antes pareciam difíceis se tornam oportunidades de crescimento.`
+    ];
+    
+    // Seleciona aleatoriamente uma frase de cada categoria
+    const randomDiagnostico = diagnosticoTemplates[Math.floor(Math.random() * diagnosticoTemplates.length)];
+    const randomBloqueio = bloqueioTemplates[Math.floor(Math.random() * bloqueioTemplates.length)];
+    const randomLiberacao = liberacaoTemplates[Math.floor(Math.random() * liberacaoTemplates.length)];
+    
+    // Atualiza o formulário com os textos gerados
+    setFeedbackForm(prev => ({
+      ...prev,
+      diagnosticoEmocional: randomDiagnostico,
+      explicacaoBloqueio: randomBloqueio,
+      caminhoLiberacao: randomLiberacao
+    }));
+    
+    toast({
+      title: "Diagnóstico Gerado!",
+      description: "Os textos foram gerados com base no padrão predominante e nas queixas do cliente. Você pode editá-los conforme necessário.",
+      variant: "default",
+    });
+  }, [analysisRequest, bodyScoringTable, toast]);
+
+  // Função de acesso seguro para os dados de padrão/área - disponível para todos os métodos
+  const getPatternData = (patType: string, areaType: string, field: 'dor' | 'recurso'): string => {
+    // Dados estáticos dos padrões emocionais
+    const patternData = {
+      "criativo": {
+        "pessoal": {
+          "dor": "Vive no mundo das ideias, sente demais por dentro, mas não consegue organizar ou expressar as emoções. Se isola para não se frustrar com o mundo externo.",
+          "recurso": "Sensível, visionário, profundo. Quando está no recurso, acessa a criatividade com leveza, se conecta com o espiritual e traz ideias que transformam o mundo."
+        },
+        "relacionamentos": {
+          "dor": "Foge de contato. Acha que se conectar é perigoso, que será invadido ou incompreendido. Tende ao isolamento e a evitar vínculo emocional.",
+          "recurso": "Gera conexões seguras com escuta profunda, conversas inteligentes e presença verdadeira. Atrai respeito sem precisar se impor."
+        },
+        "profissional": {
+          "dor": "Tem ideias incríveis, mas trava na execução. Medo de julgamento, rotina ou exposição. Procrastina e se sabota.",
+          "recurso": "Quando entende seu valor, é fonte de inovação e sabedoria. Prosperidade vem quando colabora com pessoas práticas e foca no que realmente importa."
+        }
+      },
+      "conectivo": {
+        "pessoal": {
+          "dor": "Sente demais, chora por dentro, busca atenção constantemente. Sofre por rejeição mesmo onde não há. Vive se perguntando se é amado.",
+          "recurso": "Consegue expressar emoções com leveza e verdade. É empático, alegre, gera conexão genuína e comunicação afetuosa."
+        },
+        "relacionamentos": {
+          "dor": "Se apega, se entrega demais, perde a individualidade. Cria dependência emocional e medo de abandono.",
+          "recurso": "Cria vínculos saudáveis com leveza, conexão emocional e liberdade. Sabe dar e receber na medida."
+        },
+        "profissional": {
+          "dor": "Precisa de atenção para se motivar. Desiste fácil se estiver sozinho. Oscila muito entre entusiasmo e desânimo.",
+          "recurso": "Incrível para falar, ensinar, vender, conectar. Quando sente pertencimento e é valorizado, floresce profissionalmente."
+        }
+      },
+      "forte": {
+        "pessoal": {
+          "dor": "Engole tudo. Reprime as emoções até explodir ou implodir. Vive no modo sobrevivência, carregando o peso do mundo.",
+          "recurso": "É forte, estável, profundo e resistente. Quando acessa seu valor, se expressa com segurança e transforma dor em poder."
+        },
+        "relacionamentos": {
+          "dor": "Se anula, se submete, carrega tudo nas costas. Acumula frustrações até romper ou se fechar completamente.",
+          "recurso": "Constrói relações de confiança e entrega, com base em diálogo firme e lealdade emocional. Ama com solidez."
+        },
+        "profissional": {
+          "dor": "Trabalha demais e recebe de menos. Vive para agradar e se sacrifica até se perder.",
+          "recurso": "Entrega com consistência, sustenta processos, inspira estabilidade. Ganha mais quando se posiciona com autoestima e valor próprio."
+        }
+      },
+      "lider": {
+        "pessoal": {
+          "dor": "Controla tudo. Tem dificuldade de sentir e admitir fragilidade. Usa lógica para não acessar a dor.",
+          "recurso": "Confiante, direto, inteligente. Quando se permite sentir, lidera com alma, não apenas com a mente."
+        },
+        "relacionamentos": {
+          "dor": "Domina ou manipula para evitar ser ferido. Cria distanciamento emocional por medo de perder o controle.",
+          "recurso": "Entrega presença estratégica com cuidado emocional. Lidera com firmeza, mas também com afeto real."
+        },
+        "profissional": {
+          "dor": "Quer controlar tudo, centraliza, desconfia dos outros. Tende a trabalhar sozinho por medo de traição.",
+          "recurso": "É um executor nato. Quando confia, forma equipes poderosas e alcança resultados extraordinários com agilidade."
+        }
+      },
+      "competitivo": {
+        "pessoal": {
+          "dor": "Busca ser perfeito, mas vive se cobrando. Esconde a vulnerabilidade atrás de uma aparência impecável.",
+          "recurso": "Brilha com autenticidade. Sabe que não precisa provar nada, só entregar com excelência e leveza."
+        },
+        "relacionamentos": {
+          "dor": "Exige demais, espera o ideal. Sofre ao ser rejeitado ou não reconhecido.",
+          "recurso": "Ama intensamente e com verdade. Quando aprende a se mostrar, constrói vínculos com profundidade e prazer."
+        },
+        "profissional": {
+          "dor": "Tem medo de falhar, trava nos detalhes, procrastina com medo de não entregar perfeito.",
+          "recurso": "É produtivo, disciplinado e focado. Cresce quando entende que feito é melhor que perfeito. Prosperidade vem com consistência e autocuidado."
+        }
+      }
+    };
+    
+    // Normaliza os tipos para garantir acesso correto
+    const normalizedPattern = normalizePatternType(patType);
+    const normalizedArea = mapAreaType(areaType);
+    
+    console.log("Acessando patternData:", { 
+      pattern: normalizedPattern, 
+      area: normalizedArea, 
+      campo: field 
+    });
+    
+    try {
+      // Tenta acessar o caminho completo
+      const patternObject = patternData[normalizedPattern as keyof typeof patternData];
+      if (!patternObject) {
+        throw new Error(`Padrão não encontrado: ${normalizedPattern}`);
+      }
+      
+      const areaObject = patternObject[normalizedArea as keyof typeof patternObject];
+      if (!areaObject) {
+        // Fallback para área pessoal se a área específica não existir
+        const fallbackArea = patternObject["pessoal"];
+        if (fallbackArea && fallbackArea[field]) {
+          return fallbackArea[field];
+        }
+        throw new Error(`Área não encontrada: ${normalizedArea}`);
+      }
+      
+      return areaObject[field] || '';
+    } catch (error) {
+      console.error(`Erro ao acessar dados do padrão: ${error}`);
+      return field === 'dor' 
+        ? "Enfrenta dificuldades em expressar emoções autênticas."
+        : "Pode desenvolver maior consciência emocional através de práticas reflexivas.";
+    }
+  };
+
+  // Função para gerar todas as seções do Bloco 1 e Bloco 2 de uma vez
+  const generateCompleteBloco1 = useCallback(() => {
+    if (!analysisRequest || !bodyScoringTable) {
+      toast({
+        title: "Dados insuficientes",
+        description: "Não foi possível gerar o conteúdo automático. Verifique se todos os dados da análise estão disponíveis.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Gerar o diagnóstico (Bloco 1)
+    generateDiagnostico();
+    
+    // Obter padrões que somam mais de 50% do perfil emocional
+    const primaryPattern = bodyScoringTable.primaryPattern.toLowerCase();
+    const secondaryPattern = bodyScoringTable.secondaryPattern.toLowerCase();
+    const tertiaryPattern = bodyScoringTable.tertiaryPattern.toLowerCase();
+    
+    const primaryPercentage = getPercentageForPattern(bodyScoringTable, bodyScoringTable.primaryPattern);
+    const secondaryPercentage = getPercentageForPattern(bodyScoringTable, bodyScoringTable.secondaryPattern);
+    const tertiaryPercentage = getPercentageForPattern(bodyScoringTable, bodyScoringTable.tertiaryPattern);
+    
+    // Determinar quais padrões considerar
+    let patternsToConsider = [primaryPattern];
+    let totalPercentage = primaryPercentage;    // Sempre começamos com o padrão primário e incluímos padrões que somam mais de 50%
+    // E também incluímos padrões significativos (>15%)
+    
+    // Se o padrão primário já tiver mais de 50%, ainda podemos incluir o secundário 
+    // se ele for significativo (mais de 15%)
+    if (primaryPercentage >= 50) {
+      // Adicionamos o secundário se for significativo
+      if (secondaryPercentage >= 15) {
+        patternsToConsider.push(secondaryPattern);
+        totalPercentage += secondaryPercentage;
+        
+        // Mesmo se já tivermos mais de 50%, podemos adicionar o terciário
+        // se ele for significativo
+        if (tertiaryPercentage >= 15) {
+          patternsToConsider.push(tertiaryPattern);
+          totalPercentage += tertiaryPercentage;
+        }
+      }
+    } 
+    // Se o primário não alcançar 50%, adicionamos outros padrões até chegar a 50%
+    else if (secondaryPercentage > 0) {
+      patternsToConsider.push(secondaryPattern);
+      totalPercentage += secondaryPercentage;
+      
+      // Se ainda não chegarmos a 50%, adicionamos o terciário
+      if (totalPercentage < 50 && tertiaryPercentage > 0) {
+        patternsToConsider.push(tertiaryPattern);
+        totalPercentage += tertiaryPercentage;
+      }
+      // Se já chegamos a 50% e o terciário for significativo, também o incluímos
+      else if (totalPercentage >= 50 && tertiaryPercentage >= 15) {
+        patternsToConsider.push(tertiaryPattern);
+        totalPercentage += tertiaryPercentage;
+      }
+    }
+    
+    // Obter informações para o Bloco 2 (usando o padrão predominante como base)
+    const patternType = primaryPattern;
+    const patternDisplay = patternNames[patternType] || patternType.toUpperCase();
+    const patternPercentage = primaryPercentage;
+    
+    // Textos para as diferentes áreas usando a função compartilhada getPatternData para acessar dor e recurso
+    
+    // Textos para as diferentes áreas usando a função segura de acesso aos dados - combinando todos os padrões
+    let pessoalDor = '';
+    let pessoalRecurso = '';
+    let relacionamentosDor = '';
+    let relacionamentosRecurso = '';
+    let profissionalDor = '';
+    let profissionalRecurso = '';
+    
+    // Iteramos sobre todos os padrões considerados para combinar as descrições
+    patternsToConsider.forEach((pattern, index) => {
+      const patternPessoalDor = getPatternData(pattern, 'pessoal', 'dor');
+      const patternPessoalRecurso = getPatternData(pattern, 'pessoal', 'recurso');
+      const patternRelacionamentosDor = getPatternData(pattern, 'relacionamentos', 'dor');
+      const patternRelacionamentosRecurso = getPatternData(pattern, 'relacionamentos', 'recurso');
+      const patternProfissionalDor = getPatternData(pattern, 'profissional', 'dor');
+      const patternProfissionalRecurso = getPatternData(pattern, 'profissional', 'recurso');
+      
+      // Para o primeiro padrão, usamos o texto completo
+      if (index === 0) {
+        pessoalDor = patternPessoalDor;
+        pessoalRecurso = patternPessoalRecurso;
+        relacionamentosDor = patternRelacionamentosDor;
+        relacionamentosRecurso = patternRelacionamentosRecurso;
+        profissionalDor = patternProfissionalDor;
+        profissionalRecurso = patternProfissionalRecurso;
+      } else {
+        // Para os próximos padrões, adicionamos com uma transição
+        pessoalDor += ` Além disso, ${patternPessoalDor.toLowerCase()}`;
+        pessoalRecurso += ` Complementarmente, ${patternPessoalRecurso.toLowerCase()}`;
+        relacionamentosDor += ` Além disso, ${patternRelacionamentosDor.toLowerCase()}`;
+        relacionamentosRecurso += ` Complementarmente, ${patternRelacionamentosRecurso.toLowerCase()}`;
+        profissionalDor += ` Além disso, ${patternProfissionalDor.toLowerCase()}`;
+        profissionalRecurso += ` Complementarmente, ${patternProfissionalRecurso.toLowerCase()}`;
+      }
+    });
+    
+    // Valores padrão caso algo falhe
+    if (!pessoalDor) {
+      pessoalDor = `O padrão ${patternDisplay} em estado de dor faz com que você tenha dificuldade em lidar com suas emoções pessoais. Isso gera uma sensação constante de inadequação e desconexão consigo mesmo.`;
+    }
+    if (!pessoalRecurso) {
+      pessoalRecurso = `Quando o padrão ${patternDisplay} está em recurso, você consegue acessar uma profunda conexão consigo mesmo, permitindo autoconhecimento e expressão autêntica de suas emoções e pensamentos.`;
+    }
+    if (!relacionamentosDor) {
+      relacionamentosDor = `Nos relacionamentos, o padrão ${patternDisplay} em dor faz com que você tenha dificuldade em estabelecer conexões genuínas, criando barreiras invisíveis que impedem maior intimidade e compreensão mútua.`;
+    }
+    if (!relacionamentosRecurso) {
+      relacionamentosRecurso = `Com o padrão ${patternDisplay} em recurso, seus relacionamentos se beneficiam de uma comunicação mais clara e empática, permitindo conexões profundas e verdadeiras com as pessoas ao seu redor.`;
+    }
+    if (!profissionalDor) {
+      profissionalDor = `No ambiente profissional, o padrão ${patternDisplay} em dor limita seu potencial de crescimento, fazendo com que você se sinta inseguro e incapaz de demonstrar todo seu talento e capacidades.`;
+    }
+    if (!profissionalRecurso) {
+      profissionalRecurso = `Quando ativa o padrão ${patternDisplay} como recurso no trabalho, você consegue alinhar suas habilidades naturais com suas responsabilidades, aumentando produtividade e satisfação profissional.`;
+    }
+    
+    // Atualizar o estado do formulário com os textos para o Bloco 2
+    setFeedbackForm(prev => ({
+      ...prev,
+      traco1Nome: patternDisplay,
+      traco1Percentual: patternPercentage,
+      traco1Dor: {
+        pessoal: pessoalDor,
+        relacionamentos: relacionamentosDor,
+        profissional: profissionalDor
+      },
+      traco1Recurso: {
+        pessoal: pessoalRecurso,
+        relacionamentos: relacionamentosRecurso,
+        profissional: profissionalRecurso
+      }
+    }));
+    
+    toast({
+      title: "Conteúdo Gerado!",
+      description: "Os textos para os Blocos 1 e 2 foram gerados com base no padrão predominante e nas queixas do cliente. Você pode editá-los conforme necessário.",
+      variant: "default",
+    });
+  }, [generateDiagnostico, analysisRequest, bodyScoringTable, toast]);
+  
+  // Manipulador para atualizar campos de texto do formulário
+  const handleTextChange = (field: string, value: any) => {
+    setFeedbackForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+  
+  // Manipulador para atualizar campos de objeto aninhado do formulário
+  const handleNestedChange = (parentField: string, childField: string, value: string) => {
+    setFeedbackForm(prev => ({
+      ...prev,
+      [parentField]: {
+        ...prev[parentField as keyof typeof prev],
+        [childField]: value
+      }
+    }));
+  };
+  
+  // Manipulador para enviar o formulário
+  const handleSubmit = () => {
+    // Verificar se a análise já está concluída e se o usuário não é analista
+    if (analysisRequest?.status === "concluido" && !isAnalista) {
+      toast({
+        title: "Análise já concluída",
+        description: "Esta análise já foi finalizada e não pode ser modificada.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Verificação detalhada dos campos do Bloco 1 (Resposta às Queixas)
+    if (!feedbackForm.diagnosticoEmocional || !feedbackForm.explicacaoBloqueio || !feedbackForm.caminhoLiberacao) {
+      toast({
+        title: "Campos obrigatórios incompletos",
+        description: "Preencha todos os campos do Bloco 1 (Diagnóstico Emocional, Explicação do Bloqueio e Caminho de Liberação) antes de continuar.",
+        variant: "destructive",
+      });
+      setActiveTab("bloco1");
+      return;
+    }
+    
+    // Verificação do tamanho mínimo dos campos para garantir conteúdo significativo
+    if (feedbackForm.diagnosticoEmocional.length < 50 || 
+        feedbackForm.explicacaoBloqueio.length < 50 || 
+        feedbackForm.caminhoLiberacao.length < 50) {
+      toast({
+        title: "Conteúdo insuficiente",
+        description: "Os campos do Bloco 1 devem conter descrições detalhadas (mínimo de 50 caracteres cada).",
+        variant: "destructive",
+      });
+      setActiveTab("bloco1");
+      return;
+    }
+    
+    // Verificação dos nomes dos traços (se existem e correspondem ao esperado)
+    // O primeiro traço sempre é obrigatório
+    if (!feedbackForm.traco1Nome) {
+      toast({
+        title: "Padrão emocional primário ausente",
+        description: "É necessário definir pelo menos o padrão emocional principal.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Para os traços 2 e 3, verificamos se eles têm percentuais definidos
+    // Se um traço tiver percentual, ele deve ter nome também
+    if ((feedbackForm.traco2Percentual > 0 && !feedbackForm.traco2Nome) || 
+        (feedbackForm.traco3Percentual > 0 && !feedbackForm.traco3Nome)) {
+      toast({
+        title: "Padrões emocionais incompletos",
+        description: "Se um padrão tem percentual, também precisa ter seu nome definido.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Verificação extra para garantir que o ID da análise está definido
+    if (!feedbackForm.analysisRequestId || isNaN(Number(feedbackForm.analysisRequestId)) || Number(feedbackForm.analysisRequestId) <= 0) {
+      console.error("ID de análise inválido no formulário:", feedbackForm.analysisRequestId);
+      toast({
+        title: "Erro de referência",
+        description: "ID da análise inválido ou não encontrado. Por favor, recarregue a página.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Envie os dados para a API
+    console.log("Enviando análise para salvar:", {
+      id: existingResult?.id || "novo",
+      analysisRequestId: feedbackForm.analysisRequestId,
+      padrões: `${feedbackForm.traco1Nome}, ${feedbackForm.traco2Nome}, ${feedbackForm.traco3Nome}`
+    });
+    
+    saveResultMutation.mutate(feedbackForm as AnalysisResult);
+    
+    toast({
+      title: "Salvando análise...",
+      description: `Sua análise está sendo processada e salva no sistema. ID da análise: ${feedbackForm.analysisRequestId}`,
+    });
+  };
+  
+  // Obtenha as descrições dos padrões emocionais por tipo e estado (dor/recurso)
+  const getPatternDescriptions = useCallback((patternType: string, isPain: boolean): EmotionalPattern[] => {
+    if (!emotionalPatterns) return [];
+    
+    return emotionalPatterns.filter(
+      pattern => pattern.patternType.toLowerCase() === patternType.toLowerCase() && pattern.isPain === isPain
+    );
+  }, [emotionalPatterns]);
+  
+  // Função para gerar automaticamente uma resposta às queixas com base nos padrões emocionais identificados
+  const generateResponseFromPatterns = useCallback(() => {
+    if (!analysisRequest || !bodyScoringTable || !emotionalPatterns) return {};
+    
+    const primaryPattern = bodyScoringTable.primaryPattern.toLowerCase();
+    const secondaryPattern = bodyScoringTable.secondaryPattern.toLowerCase();
+    const priorityArea = analysisRequest.priorityArea;
+    const complaints = [
+      analysisRequest.complaint1,
+      ...(analysisRequest.complaint2 ? [analysisRequest.complaint2] : []),
+      ...(analysisRequest.complaint3 ? [analysisRequest.complaint3] : [])
+    ].filter(Boolean).join(", ");
+    
+    console.log("Gerando resposta automática com base em:", {
+      padrões: `${primaryPattern}, ${secondaryPattern}`,
+      área: priorityArea,
+      queixas: complaints
+    });
+    
+    // Buscar padrões emocionais relevantes para o diagnóstico
+    const primaryPatternPains = emotionalPatterns.filter(
+      p => p.patternType.toLowerCase() === primaryPattern && 
+           p.isPain === true && 
+           p.areaType.toLowerCase() === priorityArea
+    );
+    
+    const secondaryPatternPains = emotionalPatterns.filter(
+      p => p.patternType.toLowerCase() === secondaryPattern && 
+           p.isPain === true && 
+           p.areaType.toLowerCase() === priorityArea
+    );
+    
+    const primaryPatternResources = emotionalPatterns.filter(
+      p => p.patternType.toLowerCase() === primaryPattern && 
+           p.isPain === false && 
+           p.areaType.toLowerCase() === priorityArea
+    );
+    
+    // Gerar diagnóstico emocional (integra as queixas com os padrões identificados)
+    let diagnosticoEmocional = "";
+    if (primaryPatternPains.length > 0) {
+      diagnosticoEmocional = `Analisando suas queixas de ${complaints}, identificamos que seu perfil ${patternNames[primaryPattern] || primaryPattern} (${bodyScoringTable.primaryPattern === 'criativo' ? bodyScoringTable.creativoPercentage : 
+      bodyScoringTable.primaryPattern === 'conectivo' ? bodyScoringTable.conectivoPercentage :
+      bodyScoringTable.primaryPattern === 'forte' ? bodyScoringTable.fortePercentage :
+      bodyScoringTable.primaryPattern === 'lider' ? bodyScoringTable.liderPercentage :
+      bodyScoringTable.primaryPattern === 'competitivo' ? bodyScoringTable.competitivoPercentage : 0}%) está gerando bloqueios emocionais principalmente na área de ${areaNames[priorityArea] || priorityArea}. ${primaryPatternPains[0]?.description || ""}`;
+    } else {
+      diagnosticoEmocional = `Suas queixas de ${complaints} refletem bloqueios emocionais típicos do padrão ${patternNames[primaryPattern] || primaryPattern}, que representa ${bodyScoringTable.primaryPattern === 'criativo' ? bodyScoringTable.creativoPercentage : 
+      bodyScoringTable.primaryPattern === 'conectivo' ? bodyScoringTable.conectivoPercentage :
+      bodyScoringTable.primaryPattern === 'forte' ? bodyScoringTable.fortePercentage :
+      bodyScoringTable.primaryPattern === 'lider' ? bodyScoringTable.liderPercentage :
+      bodyScoringTable.primaryPattern === 'competitivo' ? bodyScoringTable.competitivoPercentage : 0}% do seu perfil emocional. ${secondaryPatternPains[0]?.description || ""}`;
+    }
+    
+    // Gerar explicação do bloqueio
+    let explicacaoBloqueio = "";
+    if (secondaryPatternPains.length > 0) {
+      explicacaoBloqueio = `O bloqueio ocorre porque seu padrão ${patternNames[primaryPattern] || primaryPattern} tende a ${primaryPatternPains[0]?.description || "gerar tensões internas"}, enquanto seu padrão secundário ${patternNames[secondaryPattern] || secondaryPattern} (${bodyScoringTable.secondaryPattern === 'criativo' ? bodyScoringTable.creativoPercentage : 
+      bodyScoringTable.secondaryPattern === 'conectivo' ? bodyScoringTable.conectivoPercentage :
+      bodyScoringTable.secondaryPattern === 'forte' ? bodyScoringTable.fortePercentage :
+      bodyScoringTable.secondaryPattern === 'lider' ? bodyScoringTable.liderPercentage :
+      bodyScoringTable.secondaryPattern === 'competitivo' ? bodyScoringTable.competitivoPercentage : 0}%) amplifica isso através de ${secondaryPatternPains[0]?.description || "comportamentos limitantes"}.`;
+    } else {
+      explicacaoBloqueio = `O bloqueio está relacionado ao modo como seu padrão predominante ${patternNames[primaryPattern] || primaryPattern} responde a situações de ${complaints}, gerando ${primaryPatternPains[0]?.description || "tensões que se manifestam no corpo e nas emoções"}.`;
+    }
+    
+    // Gerar caminho de liberação
+    let caminhoLiberacao = "";
+    if (primaryPatternResources.length > 0) {
+      caminhoLiberacao = `Para superar esses bloqueios, você pode acessar os recursos naturais do seu padrão ${patternNames[primaryPattern] || primaryPattern}, como ${primaryPatternResources[0]?.description || "conexão com sua essência"}. Ao priorizar a área de ${areaNames[priorityArea] || priorityArea}, verá transformações rápidas em relação às suas queixas de ${complaints}.`;
+    } else {
+      caminhoLiberacao = `O caminho de liberação envolve transformar o seu padrão ${patternNames[primaryPattern] || primaryPattern} de dor em recurso, concentrando-se especialmente na área de ${areaNames[priorityArea] || priorityArea}. Isso permitirá resolver gradualmente suas queixas relacionadas a ${complaints}.`;
+    }
+    
+    return {
+      diagnosticoEmocional: diagnosticoEmocional.trim(),
+      explicacaoBloqueio: explicacaoBloqueio.trim(),
+      caminhoLiberacao: caminhoLiberacao.trim()
+    };
+  }, [analysisRequest, bodyScoringTable, emotionalPatterns]);
+  
+  if (isLoadingAnalysis || isLoadingScoring || isLoadingPatterns) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Carregando dados da análise...</span>
+      </div>
+    );
+  }
+  
+  // Verifique cada condição separadamente para fornecer mensagens de erro mais específicas
+  if (!analysisRequest) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="bg-red-50 border border-red-200 p-6 rounded-lg mb-6">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-8 w-8 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="ml-4 flex-1">
+              <h1 className="text-2xl font-bold text-red-800 mb-2">Solicitação de análise não encontrada</h1>
+              <div className="bg-white p-3 rounded-md border border-red-200 mb-3 font-mono text-center">
+                <span className="text-gray-500 mr-2">ID da Análise:</span>
+                <span className="font-bold text-lg">{analysisRequestId}</span>
+              </div>
+              <p className="text-red-700 mb-4">Não foi possível encontrar a solicitação de análise no sistema. Isso pode ocorrer por vários motivos:</p>
+              <ul className="list-disc list-inside space-y-1 text-red-700 mb-4">
+                <li>O ID fornecido pode estar incorreto</li>
+                <li>A solicitação pode ter sido excluída</li>
+                <li>Pode haver um problema de conexão com o banco de dados</li>
+              </ul>
+              <button 
+                onClick={() => window.location.href = '/'}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Voltar para a página inicial
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!bodyScoringTable) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="bg-red-50 border border-red-200 p-6 rounded-lg mb-6">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-xl font-semibold text-red-800">Tabela de pontuação não encontrada</h3>
+              <div className="mt-2 text-red-700">
+                <p className="mb-2">A tabela de pontuação corporal para a análise ID <strong className="font-mono">{analysisRequestId}</strong> não foi encontrada.</p>
+                <p className="mb-4">Para gerar a Virada de Chave, você precisa primeiro preencher e salvar a tabela de pontuação na <strong>Etapa 6</strong>.</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md mt-4">
+            <h3 className="font-semibold text-lg text-yellow-800 mb-2">Instruções de acesso:</h3>
+            <ol className="list-decimal list-inside space-y-2 text-yellow-700">
+              <li>Acesse a página de análises e encontre esta análise (ID: {analysisRequestId})</li>
+              <li>Clique no botão "Pontuação Corporal" para ir à Etapa 6</li>
+              <li>Preencha a tabela de pontuação para cada parte do corpo</li>
+              <li>Clique em "Salvar Tabela" após preencher todos os campos</li>
+              <li>Volte para esta página após salvar com sucesso a tabela</li>
+            </ol>
+          </div>
+          
+          <button 
+            onClick={() => window.location.href = '/'}
+            className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Voltar para a página inicial
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Obter informações do usuário logado
+  const { user } = useAuth();
+
+  // Verificar se a análise já está concluída e se o usuário NÃO é um analista
+  // Analistas podem sempre editar, usuários comuns não podem editar análises concluídas
+  const isAnalista = user?.username === "analista";
+  
+  // Definição simplificada: apenas usuários normais não podem editar análises concluídas
+  // Analistas sempre podem editar análises concluídas
+  const isAnalysisCompleted = analysisRequest?.status === "concluido" && !isAnalista;
+  
+  return (
+    <div className="container mx-auto py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Etapa 7 - Virada de Chave (Devolutiva Personalizada)</h1>
+        <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg flex items-center">
+          <span className="font-semibold mr-2">ID da Análise:</span>
+          <span className="font-mono bg-white py-1 px-3 rounded border border-blue-300">{analysisRequestId}</span>
+        </div>
+      </div>
+      
+      {/* Alerta quando a análise já estiver concluída */}
+      {analysisRequest?.status === "concluido" && (
+        <div className="mb-6">
+          <Alert variant="warning" className="bg-amber-50 border-amber-200">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertTitle className="text-amber-700">Análise já finalizada</AlertTitle>
+            <AlertDescription className="text-amber-700">
+              {isAnalista 
+                ? "Esta análise já foi concluída e os resultados estão disponíveis para o cliente. Como analista, você ainda pode fazer alterações se necessário."
+                : "Esta análise já foi concluída e os resultados estão disponíveis para o cliente. Não é possível fazer alterações."
+              }
+            </AlertDescription>
+          </Alert>
+          
+          {/* O botão de Revisar Análise foi removido conforme solicitado */}
+        </div>
+      )}
+      
+      {/* Header com informações do cliente */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Informações do Cliente</CardTitle>
+          <CardDescription>Dados básicos e prioridades do cliente</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="font-semibold">Tipo de Análise:</h3>
+              <p>{analysisRequest.analysisFor === 'myself' ? 'Para si mesmo' : 'Para terceiro'}</p>
+              
+              <h3 className="font-semibold mt-4">Área Prioritária:</h3>
+              <p>{areaNames[analysisRequest.priorityArea] || analysisRequest.priorityArea}</p>
+              
+              <h3 className="font-semibold mt-4">Queixas Principais:</h3>
+              <ul className="list-disc list-inside">
+                <li>{analysisRequest.complaint1}</li>
+                {analysisRequest.complaint2 && <li>{analysisRequest.complaint2}</li>}
+                {analysisRequest.complaint3 && <li>{analysisRequest.complaint3}</li>}
+              </ul>
+            </div>
+            
+            <div className="mt-6">
+              <h3 className="font-semibold mb-2">Padrões Emocionais:</h3>
+              <div className="bg-slate-50 p-4 rounded-md">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Padrões emocionais em lista com porcentagens */}
+                  <div className="flex flex-col space-y-2">
+                    {/* Mostrar apenas padrões com porcentagem maior que 0, ordenados por porcentagem */}
+                    {[
+                      { name: 'CRIATIVO', value: bodyScoringTable.creativoPercentage, color: 'text-purple-600' },
+                      { name: 'CONECTIVO', value: bodyScoringTable.conectivoPercentage, color: 'text-blue-600' },
+                      { name: 'FORTE', value: bodyScoringTable.fortePercentage, color: 'text-red-600' },
+                      { name: 'LÍDER', value: bodyScoringTable.liderPercentage, color: 'text-yellow-600' },
+                      { name: 'COMPETITIVO', value: bodyScoringTable.competitivoPercentage, color: 'text-green-600' }
+                    ]
+                      .filter(pattern => pattern.value > 0)
+                      .sort((a, b) => b.value - a.value)
+                      .map((pattern, index) => (
+                        <div 
+                          key={pattern.name} 
+                          className={`flex items-center justify-between ${index === 0 ? 'font-bold text-lg' : 'text-md'} ${pattern.color}`}
+                        >
+                          <span>{pattern.name}</span>
+                          <span className="font-normal">{pattern.value}%</span>
+                        </div>
+                      ))
+                    }
+                    
+                    {/* Mensagem se não houver padrões com valor */}
+                    {(!bodyScoringTable.creativoPercentage && 
+                     !bodyScoringTable.conectivoPercentage && 
+                     !bodyScoringTable.fortePercentage && 
+                     !bodyScoringTable.liderPercentage && 
+                     !bodyScoringTable.competitivoPercentage) && (
+                      <div className="text-gray-500 italic text-sm">Padrões emocionais incompletos</div>
+                    )}
+                  </div>
+                  
+                  {/* Gráfico de pizza */}
+                  <div className="flex justify-center items-center">
+                    <div className="w-32 h-32">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: 'Criativo', value: bodyScoringTable.creativoPercentage, color: '#9333ea' },
+                              { name: 'Conectivo', value: bodyScoringTable.conectivoPercentage, color: '#2563eb' },
+                              { name: 'Forte', value: bodyScoringTable.fortePercentage, color: '#dc2626' },
+                              { name: 'Líder', value: bodyScoringTable.liderPercentage, color: '#ca8a04' },
+                              { name: 'Competitivo', value: bodyScoringTable.competitivoPercentage, color: '#16a34a' }
+                            ].filter(item => item.value > 0)}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={45}
+                            fill="#8884d8"
+                            dataKey="value"
+                            nameKey="name"
+                          >
+                            {[
+                              { name: 'Criativo', value: bodyScoringTable.creativoPercentage, color: '#9333ea' },
+                              { name: 'Conectivo', value: bodyScoringTable.conectivoPercentage, color: '#2563eb' },
+                              { name: 'Forte', value: bodyScoringTable.fortePercentage, color: '#dc2626' },
+                              { name: 'Líder', value: bodyScoringTable.liderPercentage, color: '#ca8a04' },
+                              { name: 'Competitivo', value: bodyScoringTable.competitivoPercentage, color: '#16a34a' }
+                            ]
+                              .filter(item => item.value > 0)
+                              .map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))
+                            }
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Tabs para os blocos de conteúdo */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid grid-cols-2 mb-8">
+          <TabsTrigger value="bloco1">Resposta às Queixas</TabsTrigger>
+          <TabsTrigger value="bloco2">Devolutiva (Dor ❌ Recurso ✅)</TabsTrigger>
+        </TabsList>
+        
+        {/* BLOCO 1: Resposta às Queixas */}
+        <TabsContent value="bloco1">
+          <Card>
+            <CardContent className="space-y-6">
+              <div className="flex justify-between items-center mb-6 mt-4">
+                <h2 className="text-2xl font-bold text-purple-800">Bloco 1 - Respostas às Queixas</h2>
+                <Button
+                  onClick={generateCompleteBloco1}
+                  disabled={isAnalysisCompleted}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-medium"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Gerar Virada de Chave
+                </Button>
+              </div>
+              
+              {/* Diagnóstico Emocional */}
+              <div>
+                <Label htmlFor="diagnosticoEmocional" className="text-lg font-semibold flex items-center gap-2">
+                  <span className="bg-purple-100 text-purple-800 p-1 rounded text-xs">1</span>
+                  Diagnóstico Emocional
+                </Label>
+                <div className="text-slate-600 text-sm mb-3">
+                  Descreva o estado emocional atual do cliente com base na área prioritária ({areaNames[analysisRequest?.priorityArea || "health"]}) e nos padrões emocionais encontrados,
+                  <span className="font-medium"> conectando diretamente com as queixas apresentadas.</span>
+                </div>
+                <Textarea 
+                  id="diagnosticoEmocional"
+                  placeholder="Descreva o estado emocional atual do cliente com base nos padrões observados, explicando como eles estão relacionados às queixas apresentadas..."
+                  className="min-h-[150px] border-purple-200 focus-visible:ring-purple-500"
+                  value={feedbackForm.diagnosticoEmocional || ''}
+                  onChange={(e) => handleTextChange('diagnosticoEmocional', e.target.value)}
+                  disabled={isAnalysisCompleted}
+                />
+              </div>
+              
+              {/* Explicação do Bloqueio */}
+              <div>
+                <Label htmlFor="explicacaoBloqueio" className="text-lg font-semibold flex items-center gap-2">
+                  <span className="bg-red-100 text-red-800 p-1 rounded text-xs">2</span>
+                  Explicação do Bloqueio
+                </Label>
+                <div className="text-slate-600 text-sm mb-3">
+                  Explique ao cliente a verdadeira causa dos bloqueios emocionais que estão gerando as queixas relatadas,
+                  <span className="font-medium"> esclarecendo porque o padrão emocional predominante ({patternNames[bodyScoringTable.primaryPattern.toLowerCase()] || bodyScoringTable.primaryPattern}) está travando sua evolução.</span>
+                </div>
+                <Textarea 
+                  id="explicacaoBloqueio"
+                  placeholder="Explique a verdadeira causa dos bloqueios emocionais relacionados com os padrões identificados que estão gerando as queixas relatadas..."
+                  className="min-h-[150px] border-red-200 focus-visible:ring-red-500"
+                  value={feedbackForm.explicacaoBloqueio || ''}
+                  onChange={(e) => handleTextChange('explicacaoBloqueio', e.target.value)}
+                  disabled={isAnalysisCompleted}
+                />
+              </div>
+              
+              {/* Caminho de Liberação */}
+              <div>
+                <Label htmlFor="caminhoLiberacao" className="text-lg font-semibold flex items-center gap-2">
+                  <span className="bg-green-100 text-green-800 p-1 rounded text-xs">3</span>
+                  Caminho de Liberação
+                </Label>
+                <div className="text-slate-600 text-sm mb-3">
+                  Forneça orientações específicas sobre como superar os bloqueios identificados através dos recursos de cada padrão emocional, 
+                  <span className="font-medium"> oferecendo um caminho personalizado de transformação focado na área prioritária ({areaNames[analysisRequest?.priorityArea || "health"]}).</span>
+                </div>
+                <Textarea 
+                  id="caminhoLiberacao"
+                  placeholder={`Descreva o caminho de liberação emocional específico para as queixas apresentadas e área de ${areaNames[analysisRequest?.priorityArea || "health"]}, mostrando como transformar cada padrão de dor em recurso para resolver os problemas relatados...`}
+                  className="min-h-[150px] border-green-200 focus-visible:ring-green-500"
+                  value={feedbackForm.caminhoLiberacao || ''}
+                  onChange={(e) => handleTextChange('caminhoLiberacao', e.target.value)}
+                  disabled={isAnalysisCompleted}
+                />
+              </div>
+            </CardContent>
+            <CardFooter className="flex justify-between border-t py-4">
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  if (existingResult) {
+                    setFeedbackForm(existingResult);
+                  }
+                }}
+              >
+                Restaurar Dados
+              </Button>
+              <div className="flex gap-3">
+                <Button 
+                  variant="default" 
+                  onClick={handleSubmit}
+                  disabled={saveResultMutation.isPending}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  {saveResultMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Gerar Virada de Chave
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+        
+        {/* BLOCO 2: Devolutiva (Dor ❌ Recurso ✅) */}
+        <TabsContent value="bloco2">
+          <Card>
+            <CardContent className="space-y-6">
+              <div className="flex justify-between items-center mb-6 mt-4">
+                <h2 className="text-2xl font-bold text-blue-800">Bloco 2 - Devolutiva (Dor ❌ Recurso ✅)</h2>
+              </div>
+              
+              {/* Informações do Padrão Predominante */}
+              <div className="mb-8">
+                <h3 className={`text-xl font-bold mb-4 ${getPatternColor(bodyScoringTable.primaryPattern)}`}>
+                  {patternNames[bodyScoringTable.primaryPattern.toLowerCase()] || bodyScoringTable.primaryPattern} ({getPercentageForPattern(bodyScoringTable, bodyScoringTable.primaryPattern)}%)
+                </h3>
+                
+                {/* Áreas de análise */}
+                <div className="space-y-6">
+                  {/* Área Pessoal */}
+                  <div className="bg-slate-50 p-4 rounded-md">
+                    <h4 className="text-lg font-semibold mb-3">Pessoal (Sentir, Pensar, Expressar)</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Padrão em Dor */}
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center mr-2">
+                            <span className="text-red-600 text-sm">❌</span>
+                          </div>
+                          <span className="font-semibold text-red-700">Dor</span>
+                        </div>
+                        <Textarea 
+                          placeholder="Descreva como este padrão se manifesta de forma negativa na área pessoal..."
+                          className="min-h-[100px] border-red-200 focus-visible:ring-red-500"
+                          value={feedbackForm.traco1Dor?.pessoal || ''}
+                          onChange={(e) => handleTextChange('traco1Dor', { 
+                            ...feedbackForm.traco1Dor, 
+                            pessoal: e.target.value 
+                          })}
+                        />
+                      </div>
+                      
+                      {/* Padrão em Recurso */}
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mr-2">
+                            <span className="text-green-600 text-sm">✅</span>
+                          </div>
+                          <span className="font-semibold text-green-700">Recurso</span>
+                        </div>
+                        <Textarea 
+                          placeholder="Descreva como este padrão pode ser utilizado de forma positiva na área pessoal..."
+                          className="min-h-[100px] border-green-200 focus-visible:ring-green-500"
+                          value={feedbackForm.traco1Recurso?.pessoal || ''}
+                          onChange={(e) => handleTextChange('traco1Recurso', { 
+                            ...feedbackForm.traco1Recurso, 
+                            pessoal: e.target.value 
+                          })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Área de Relacionamentos */}
+                  <div className="bg-slate-50 p-4 rounded-md">
+                    <h4 className="text-lg font-semibold mb-3">Relacionamentos</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Padrão em Dor */}
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center mr-2">
+                            <span className="text-red-600 text-sm">❌</span>
+                          </div>
+                          <span className="font-semibold text-red-700">Dor</span>
+                        </div>
+                        <Textarea 
+                          placeholder="Descreva como este padrão se manifesta de forma negativa na área de relacionamentos..."
+                          className="min-h-[100px] border-red-200 focus-visible:ring-red-500"
+                          value={feedbackForm.traco1Dor?.relacionamentos || ''}
+                          onChange={(e) => handleTextChange('traco1Dor', { 
+                            ...feedbackForm.traco1Dor, 
+                            relacionamentos: e.target.value 
+                          })}
+                        />
+                      </div>
+                      
+                      {/* Padrão em Recurso */}
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mr-2">
+                            <span className="text-green-600 text-sm">✅</span>
+                          </div>
+                          <span className="font-semibold text-green-700">Recurso</span>
+                        </div>
+                        <Textarea 
+                          placeholder="Descreva como este padrão pode ser utilizado de forma positiva na área de relacionamentos..."
+                          className="min-h-[100px] border-green-200 focus-visible:ring-green-500"
+                          value={feedbackForm.traco1Recurso?.relacionamentos || ''}
+                          onChange={(e) => handleTextChange('traco1Recurso', { 
+                            ...feedbackForm.traco1Recurso, 
+                            relacionamentos: e.target.value 
+                          })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Área Profissional */}
+                  <div className="bg-slate-50 p-4 rounded-md">
+                    <h4 className="text-lg font-semibold mb-3">Profissional</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Padrão em Dor */}
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center mr-2">
+                            <span className="text-red-600 text-sm">❌</span>
+                          </div>
+                          <span className="font-semibold text-red-700">Dor</span>
+                        </div>
+                        <Textarea 
+                          placeholder="Descreva como este padrão se manifesta de forma negativa na área profissional..."
+                          className="min-h-[100px] border-red-200 focus-visible:ring-red-500"
+                          value={feedbackForm.traco1Dor?.profissional || ''}
+                          onChange={(e) => handleTextChange('traco1Dor', { 
+                            ...feedbackForm.traco1Dor, 
+                            profissional: e.target.value 
+                          })}
+                        />
+                      </div>
+                      
+                      {/* Padrão em Recurso */}
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mr-2">
+                            <span className="text-green-600 text-sm">✅</span>
+                          </div>
+                          <span className="font-semibold text-green-700">Recurso</span>
+                        </div>
+                        <Textarea 
+                          placeholder="Descreva como este padrão pode ser utilizado de forma positiva na área profissional..."
+                          className="min-h-[100px] border-green-200 focus-visible:ring-green-500"
+                          value={feedbackForm.traco1Recurso?.profissional || ''}
+                          onChange={(e) => handleTextChange('traco1Recurso', { 
+                            ...feedbackForm.traco1Recurso, 
+                            profissional: e.target.value 
+                          })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="text-slate-500 italic text-sm mt-6">
+                <p><strong>Estilo da Devolutiva:</strong> Verdadeira, profunda, simples, emocional e educativa</p>
+                <p><strong>Foco:</strong> Desbloqueio, leveza e clareza</p>
+              </div>
+            </CardContent>
+            <CardFooter className="flex justify-between border-t py-4">
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  if (existingResult) {
+                    setFeedbackForm(existingResult);
+                  }
+                }}
+              >
+                Restaurar Dados
+              </Button>
+              <div className="flex gap-3">
+                <Button 
+                  variant="default" 
+                  onClick={handleSubmit}
+                  disabled={saveResultMutation.isPending}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  {saveResultMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Salvar
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+export default KeyTurnFeedbackForm;
